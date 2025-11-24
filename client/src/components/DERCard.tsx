@@ -9,9 +9,9 @@ interface DERCardProps {
   name: string;
   capacity: number;
   currentOutput: number;
-  status: "active" | "idle" | "offline";
+  status?: "active" | "idle" | "offline";
   owner?: string;
-  available: boolean;
+  availability?: "available" | "unavailable" | "maintenance";
   onActivate?: () => void;
 }
 
@@ -23,11 +23,17 @@ const typeConfig = {
   other: { icon: Zap, label: "Other DER", color: "text-gray-600 dark:text-gray-400" }
 };
 
-const statusVariant = {
+const statusVariant: Record<string, any> = {
   active: "default",
   idle: "secondary",
   offline: "outline"
-} as const;
+};
+
+const availabilityVariant: Record<string, any> = {
+  available: "default",
+  unavailable: "destructive",
+  maintenance: "secondary"
+};
 
 export default function DERCard({
   id,
@@ -35,9 +41,9 @@ export default function DERCard({
   name,
   capacity,
   currentOutput,
-  status,
+  status = "idle",
   owner,
-  available,
+  availability = "available",
   onActivate
 }: DERCardProps) {
   const config = typeConfig[type];
@@ -57,8 +63,8 @@ export default function DERCard({
               <p className="text-xs text-muted-foreground">{config.label}</p>
             </div>
           </div>
-          <Badge variant={statusVariant[status]} className="text-xs">
-            {status}
+          <Badge variant={availabilityVariant[availability] || "default"} className="text-xs">
+            {availability}
           </Badge>
         </div>
 
@@ -83,13 +89,13 @@ export default function DERCard({
 
         <Button
           size="sm"
-          variant={available ? "default" : "outline"}
+          variant={availability === "available" ? "default" : "outline"}
           className="w-full"
-          disabled={!available || status === "offline"}
+          disabled={availability !== "available" || status === "offline"}
           onClick={onActivate}
           data-testid={`button-activate-der-${id}`}
         >
-          {available ? (status === "active" ? "Deactivate" : "Activate DER") : "Unavailable"}
+          {availability === "available" ? (status === "active" ? "Deactivate" : "Activate DER") : "Unavailable"}
         </Button>
       </div>
     </Card>

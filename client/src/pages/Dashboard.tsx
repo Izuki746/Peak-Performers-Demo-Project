@@ -122,7 +122,7 @@ export default function Dashboard() {
   };
 
   const activeDERs = mockDERs.filter(d => d.status === "active").length;
-  const availableDERs = mockDERs.filter(d => d.available).length;
+  const availableDERs = mockDERs.filter(d => d.availability === "available").length;
 
   return (
     <div className="p-6 lg:p-8 space-y-8 max-w-[1600px] mx-auto">
