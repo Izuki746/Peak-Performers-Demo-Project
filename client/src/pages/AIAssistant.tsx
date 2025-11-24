@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import ChatbotPanel from "@/components/ChatbotPanel";
 import { Sparkles, Cpu, Zap } from "lucide-react";
@@ -8,11 +9,97 @@ import { Sparkles, Cpu, Zap } from "lucide-react";
 export default function AIAssistant() {
   const { toast } = useToast();
 
-  const handleSendMessage = (message: string) => {
+  const handleSendMessage = async (message: string) => {
     toast({
-      title: "Processing Request",
-      description: "AI is analyzing your request...",
+      title: "Processing via BECKN Protocol",
+      description: "AI is analyzing and executing your request...",
     });
+
+    // Parse intent from message
+    const lowerMessage = message.toLowerCase();
+    
+    try {
+      if (lowerMessage.includes("search") || lowerMessage.includes("find") || lowerMessage.includes("discover")) {
+        // BECKN Search workflow
+        const response = await fetch("/api/der/search", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            fulfillmentType: "energy-dispatch",
+            quantity: { amount: "100", unit: "kWh" }
+          })
+        });
+
+        const result = await response.json();
+        if (result.success) {
+          toast({
+            title: "BECKN Search Complete",
+            description: `Found ${result.data.length} available DER resources`,
+            variant: "default",
+          });
+        }
+      } else if (lowerMessage.includes("activate") || lowerMessage.includes("enable") || lowerMessage.includes("turn on")) {
+        // BECKN Select + Confirm workflow
+        toast({
+          title: "BECKN Activation Workflow",
+          description: "Executing select and confirm transactions...",
+        });
+
+        // Simulate activation of first available DER
+        const searchResponse = await fetch("/api/der/search", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            fulfillmentType: "energy-dispatch",
+            quantity: { amount: "50", unit: "kWh" }
+          })
+        });
+
+        const searchResult = await searchResponse.json();
+        if (searchResult.success && searchResult.data.length > 0) {
+          const der = searchResult.data[0];
+          const activateResponse = await fetch(`/api/der/${der.id}/activate`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              quantity: { amount: "50", unit: "kWh" },
+              startTime: new Date().toISOString(),
+              endTime: new Date(Date.now() + 3600000).toISOString()
+            })
+          });
+
+          const activateResult = await activateResponse.json();
+          if (activateResult.success) {
+            toast({
+              title: "BECKN Activation Success",
+              description: `DER ${der.name} activated. Order: ${activateResult.data.orderId}`,
+              variant: "default",
+            });
+          }
+        }
+      } else if (lowerMessage.includes("status") || lowerMessage.includes("check")) {
+        // BECKN Status workflow
+        toast({
+          title: "BECKN Status Check",
+          description: "Retrieving current DER status via BECKN Protocol...",
+          variant: "default",
+        });
+      } else if (lowerMessage.includes("cancel")) {
+        // BECKN Cancel workflow
+        toast({
+          title: "BECKN Cancel Workflow",
+          description: "Processing cancellation request...",
+          variant: "default",
+        });
+      }
+    } catch (error) {
+      console.error("BECKN workflow error:", error);
+      toast({
+        title: "BECKN Workflow Error",
+        description: "Failed to execute BECKN protocol workflow",
+        variant: "destructive",
+      });
+    }
   };
 
   return (

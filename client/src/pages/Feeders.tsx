@@ -88,19 +88,65 @@ export default function Feeders() {
     });
   };
 
-  const handleActivateDERsForFeeder = (feederId: string) => {
+  const handleActivateDERsForFeeder = async (feederId: string) => {
+    const feeder = mockFeeders.find(f => f.id === feederId);
+    if (!feeder) return;
+
     toast({
       title: "Initiating Beckn Protocol",
-      description: `Starting DER activation workflow for ${feederId}`,
+      description: `Starting DER search and activation for ${feederId}...`,
     });
-    
-    setTimeout(() => {
+
+    try {
+      // Step 1: Search for DERs via BECKN Protocol
+      const searchResponse = await fetch("/api/der/search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fulfillmentType: "energy-dispatch",
+          quantity: {
+            amount: Math.round((feeder.capacity - feeder.currentLoad) * 0.8).toString(),
+            unit: "kWh"
+          }
+        })
+      });
+
+      const searchResult = await searchResponse.json();
+      if (!searchResult.success) throw new Error("Search failed");
+
+      const availableDERs = searchResult.data.slice(0, 3); // Select top 3 DERs
+
+      // Step 2: Activate DERs via BECKN Protocol
+      const activationPromises = availableDERs.map((der: any) =>
+        fetch(`/api/der/${der.id}/activate`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            quantity: { amount: "25", unit: "kWh" },
+            startTime: new Date().toISOString(),
+            endTime: new Date(Date.now() + 3600000).toISOString()
+          })
+        })
+      );
+
+      const activationResponses = await Promise.all(activationPromises);
+      const activationResults = await Promise.all(activationResponses.map(r => r.json()));
+
+      const successfulActivations = activationResults.filter(r => r.success);
+
       toast({
         title: "DER Activation Successful",
-        description: `8 DERs activated for ${feederId}. Load reduced by 12.5 MW.`,
+        description: `${successfulActivations.length} DERs activated for ${feederId} via BECKN Protocol. Load reduction: ${successfulActivations.length * 25} kWh.`,
         variant: "default",
       });
-    }, 2000);
+    } catch (error) {
+      console.error("BECKN activation error:", error);
+      toast({
+        title: "Activation Failed",
+        description: "Failed to activate DERs via BECKN Protocol",
+        variant: "destructive",
+      });
+    }
   };
 
   const filteredFeeders = mockFeeders.filter(f => 
