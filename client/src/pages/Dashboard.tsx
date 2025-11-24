@@ -83,8 +83,8 @@ export default function Dashboard() {
     };
     
     fetchData();
-    // Refresh every 5 seconds for real-time updates
-    const interval = setInterval(fetchData, 5000);
+    // Refresh every 3 seconds for real-time updates (<5s SLA)
+    const interval = setInterval(fetchData, 3000);
     return () => clearInterval(interval);
   }, []);
 

@@ -20,10 +20,10 @@ export async function registerRoutes(app: Express) {
   // ============================================
   // AUTO-DEACTIVATION MONITOR
   // ============================================
-  // Checks every 30 seconds if feeders are under control
+  // Checks every 5 seconds if feeders are under control (SLA: <5s operations)
   // If load drops below 75% capacity, automatically deactivates DERs
   
-  const AUTO_DEACTIVATION_INTERVAL = 30000; // 30 seconds
+  const AUTO_DEACTIVATION_INTERVAL = 5000; // 5 seconds for sub-5s SLA
   const LOAD_THRESHOLD_PERCENT = 75; // Auto-deactivate when below 75% load
   const CRITICAL_LOAD_PERCENT = 90; // Request user activation when above 90% load
   

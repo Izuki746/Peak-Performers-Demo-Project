@@ -42,8 +42,8 @@ export default function AuditLogs() {
     };
 
     fetchLogs();
-    // Refresh logs every 5 seconds
-    const interval = setInterval(fetchLogs, 5000);
+    // Refresh logs every 3 seconds for real-time updates (<5s SLA)
+    const interval = setInterval(fetchLogs, 3000);
     return () => clearInterval(interval);
   }, []);
 

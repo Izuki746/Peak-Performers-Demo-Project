@@ -56,11 +56,11 @@ export default function Feeders() {
     fetchFeeders();
     checkAutoActivationRequests();
     
-    // Refresh feeders every 5 seconds and check for auto-activation requests
+    // Refresh feeders every 3 seconds and check for auto-activation requests (<5s SLA)
     const interval = setInterval(() => {
       fetchFeeders();
       checkAutoActivationRequests();
-    }, 5000);
+    }, 3000);
     
     return () => clearInterval(interval);
   }, []);
