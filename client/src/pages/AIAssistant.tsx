@@ -66,18 +66,158 @@ export default function AIAssistant() {
         return { response: "⚠️ Auto-activation is currently in progress. Please try again in a moment." };
       }
 
-      // BECKN Status - Check DER status
-      else if (lowerMessage.includes("status") || lowerMessage.includes("check")) {
+      // Dismiss auto-activation alerts
+      else if (lowerMessage.includes("dismiss") || lowerMessage.includes("skip") || lowerMessage.includes("no thanks")) {
+        const feedersResponse = await fetch("/api/feeders");
+        const feedersResult = await feedersResponse.json();
+        const feeders = feedersResult.data || [];
+        
+        const criticalFeeder = feeders.find((f: any) => f.status === "critical");
+        if (criticalFeeder) {
+          await fetch(`/api/auto-activation/${criticalFeeder.id}/dismiss`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" }
+          });
+          
+          return {
+            response: `✅ **Alert Dismissed**\n\nI've dismissed the auto-activation alert for **${criticalFeeder.name}** at ${criticalFeeder.substationName}.\n\nCurrent Status:\n• Load: ${((criticalFeeder.currentLoad / criticalFeeder.capacity) * 100).toFixed(1)}%\n• Capacity: ${criticalFeeder.currentLoad.toFixed(1)} / ${criticalFeeder.capacity} MW\n\n📌 You can re-trigger activation anytime if needed.`
+          };
+        }
+        return { response: "✅ No alerts to dismiss. All feeders are operating normally." };
+      }
+
+      // Deactivate DERs / Turn off
+      else if (lowerMessage.includes("deactivate") || lowerMessage.includes("turn off") || lowerMessage.includes("stop")) {
+        const feedersResponse = await fetch("/api/feeders");
+        const feedersResult = await feedersResponse.json();
+        const feeders = feedersResult.data || [];
+        
+        let deactivatedCount = 0;
+        let details = [];
+        
+        for (const feeder of feeders) {
+          if (feeder.activeDERs && feeder.activeDERs.length > 0) {
+            for (const der of feeder.activeDERs) {
+              await fetch(`/api/der/${der.orderId}/deactivate`, { method: "POST" });
+              deactivatedCount++;
+              details.push(`• ${feeder.name}: Deactivated (Order ${der.orderId})`);
+            }
+          }
+        }
+        
+        if (deactivatedCount > 0) {
+          return {
+            response: `🛑 **DERs Deactivated Successfully**\n\n${details.join("\n")}\n\n**Summary:**\n• Total DERs Deactivated: ${deactivatedCount}\n• Load reduction removed\n• Grid returning to baseline\n\n✅ All active DERs have been turned off.`
+          };
+        }
+        return { response: "ℹ️ No active DERs to deactivate. The grid is running at baseline." };
+      }
+
+      // View audit logs / history
+      else if (lowerMessage.includes("log") || lowerMessage.includes("history") || lowerMessage.includes("audit")) {
+        const logsResponse = await fetch("/api/audit-logs");
+        const logsResult = await logsResponse.json();
+        const logs = logsResult.data || [];
+        
+        if (logs.length === 0) {
+          return { response: "📋 **Audit Log**\n\nNo actions have been recorded yet." };
+        }
+        
+        const recentLogs = logs.slice(0, 5).map((log: any) => {
+          const time = new Date(log.timestamp);
+          const timeStr = time.toLocaleTimeString();
+          return `• [${timeStr}] ${log.action} - ${log.description}`;
+        });
+        
         return {
-          response: "📊 Current Grid Status via BECKN Protocol:\n\n• Total Load: 2,847 MW\n• Available Capacity: 1,453 MW\n• Active DERs: 3 resources\n• Response Time: 3.2 seconds\n• Grid Health: Optimal\n\nAll systems nominal. Ready for demand response activation."
+          response: `📋 **Recent Activity Log** (Last ${recentLogs.length} actions)\n\n${recentLogs.join("\n")}\n\n✅ Total events recorded: ${logs.length}`
+        };
+      }
+
+      // Get recommendations
+      else if (lowerMessage.includes("recommend") || lowerMessage.includes("suggest") || lowerMessage.includes("what should")) {
+        const feedersResponse = await fetch("/api/feeders");
+        const feedersResult = await feedersResponse.json();
+        const feeders = feedersResult.data || [];
+        
+        const critical = feeders.filter((f: any) => f.status === "critical");
+        const warning = feeders.filter((f: any) => f.status === "warning");
+        
+        let recommendations = "🎯 **AI Recommendations**\n\n";
+        
+        if (critical.length > 0) {
+          recommendations += `⚠️ **CRITICAL ACTION NEEDED:**\n`;
+          critical.forEach((f: any) => {
+            const load = ((f.currentLoad / f.capacity) * 100).toFixed(1);
+            recommendations += `• ${f.name} is at ${load}% capacity - ACTIVATE DERs NOW\n`;
+          });
+          recommendations += "\n";
+        }
+        
+        if (warning.length > 0) {
+          recommendations += `⚠️ **MONITOR CLOSELY:**\n`;
+          warning.forEach((f: any) => {
+            const load = ((f.currentLoad / f.capacity) * 100).toFixed(1);
+            recommendations += `• ${f.name} is at ${load}% capacity - Ready to activate if needed\n`;
+          });
+          recommendations += "\n";
+        }
+        
+        if (critical.length === 0 && warning.length === 0) {
+          recommendations += "✅ **All feeders operating normally** - No immediate action needed\n• Grid is stable\n• All systems optimal\n• DERs on standby";
+        }
+        
+        return { response: recommendations };
+      }
+
+      // BECKN Status - Check grid status
+      else if (lowerMessage.includes("status") || lowerMessage.includes("check")) {
+        const feedersResponse = await fetch("/api/feeders");
+        const feedersResult = await feedersResponse.json();
+        const feeders = feedersResult.data || [];
+        
+        const totalLoad = feeders.reduce((sum: number, f: any) => sum + f.currentLoad, 0);
+        const totalCapacity = feeders.reduce((sum: number, f: any) => sum + f.capacity, 0);
+        const activeDERCount = feeders.reduce((sum: number, f: any) => sum + (f.activeDERs?.length || 0), 0);
+        const loadPercent = Math.round((totalLoad / totalCapacity) * 100);
+        
+        return {
+          response: `📊 **Grid Status Report**\n\n**Load Metrics:**\n• Total Load: ${totalLoad.toFixed(1)} MW / ${totalCapacity.toFixed(1)} MW\n• Load: ${loadPercent}%\n• Active DERs: ${activeDERCount}\n\n**Feeder Status:**\n• Critical: ${feeders.filter((f: any) => f.status === "critical").length}\n• Warning: ${feeders.filter((f: any) => f.status === "warning").length}\n• Normal: ${feeders.filter((f: any) => f.status === "normal").length}\n\n${loadPercent > 80 ? "⚠️ **Grid under stress - consider activating DERs**" : "✅ **Grid operating normally**"}`
         };
       }
 
       // BECKN Query - Check critical feeders
       else if (lowerMessage.includes("critical") || lowerMessage.includes("feeder")) {
-        return {
-          response: "⚠️ Critical Feeders Analysis (via BECKN Protocol):\n\n**Feeder F-1234** (Westminster Substation)\n• Load: 87.5/95 MW (92% capacity)\n• Status: CRITICAL\n• Available DERs: 12 resources\n• Recommended Action: Activate 3-4 DERs\n\n**Feeder F-5678** (Camden Substation)\n• Load: 68.2/90 MW (76% capacity)\n• Status: WARNING\n• Available DERs: 8 resources\n• Recommended Action: Monitor closely\n\nWould you like me to activate DERs for any of these feeders?"
-        };
+        const feedersResponse = await fetch("/api/feeders");
+        const feedersResult = await feedersResponse.json();
+        const feeders = feedersResult.data || [];
+        
+        const criticalFeeders = feeders.filter((f: any) => f.status === "critical");
+        const warningFeeders = feeders.filter((f: any) => f.status === "warning");
+        
+        let response = "📍 **Feeder Analysis**\n\n";
+        
+        if (criticalFeeders.length > 0) {
+          response += "🔴 **CRITICAL FEEDERS:**\n";
+          criticalFeeders.forEach((f: any) => {
+            const load = ((f.currentLoad / f.capacity) * 100).toFixed(1);
+            response += `• **${f.name}** (${f.substationName})\n  Load: ${load}% | ${f.currentLoad.toFixed(1)}/${f.capacity} MW\n  DERs Available: ${f.connectedDERs}\n`;
+          });
+        }
+        
+        if (warningFeeders.length > 0) {
+          response += "\n🟡 **WARNING FEEDERS:**\n";
+          warningFeeders.forEach((f: any) => {
+            const load = ((f.currentLoad / f.capacity) * 100).toFixed(1);
+            response += `• **${f.name}** (${f.substationName})\n  Load: ${load}% | ${f.currentLoad.toFixed(1)}/${f.capacity} MW\n  DERs Available: ${f.connectedDERs}\n`;
+          });
+        }
+        
+        if (criticalFeeders.length === 0 && warningFeeders.length === 0) {
+          response += "✅ **All feeders operating normally** - No critical or warning status detected";
+        }
+        
+        return { response };
       }
 
       // BECKN Cancel - Cancel activation
@@ -90,7 +230,7 @@ export default function AIAssistant() {
       // Default helpful response
       else {
         return {
-          response: "I'm here to help! Here are things I can do via BECKN Protocol:\n\n🔍 **Search:** 'Find available DERs'\n⚡ **Activate:** 'Activate DERs' or 'Turn on renewable energy'\n📊 **Status:** 'Check grid status' or 'What's the current load?'\n⚠️ **Alerts:** 'Show critical feeders'\n❌ **Cancel:** 'Cancel order [ID]'\n\nWhat would you like to do?"
+          response: "I'm here to help! Here are things I can do via BECKN Protocol:\n\n⚡ **Activate:** 'Activate DERs' or 'Turn on energy'\n🛑 **Deactivate:** 'Turn off DERs' or 'Stop resources'\n📊 **Status:** 'Check grid status' or 'What's the current load?'\n⚠️ **Analyze:** 'Show critical feeders' or 'Get recommendations'\n❌ **Dismiss:** 'Dismiss alerts' or 'Skip activation'\n📋 **History:** 'Show logs' or 'View activity'\n🔍 **Search:** 'Find available DERs'\n\nWhat would you like me to do?"
         };
       }
     } catch (error) {
