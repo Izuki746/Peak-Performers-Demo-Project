@@ -9,6 +9,9 @@ import * as agentOrchestrator from "./agent-orchestrator";
 
 const router = Router();
 
+// Module-level state for pending auto-activation requests (accessible to all endpoints)
+const pendingAutoActivationRequests = new Set<string>();
+
 export async function registerRoutes(app: Express) {
   app.use(router);
 
@@ -23,10 +26,6 @@ export async function registerRoutes(app: Express) {
   const AUTO_DEACTIVATION_INTERVAL = 30000; // 30 seconds
   const LOAD_THRESHOLD_PERCENT = 75; // Auto-deactivate when below 75% load
   const CRITICAL_LOAD_PERCENT = 90; // Request user activation when above 90% load
-  const pendingAutoActivationRequests = new Set<string>(); // Track which feeders are pending user confirmation
-  
-  // Store pending requests globally so frontend can access them
-  (app as any).pendingAutoActivationRequests = pendingAutoActivationRequests;
   
   setInterval(async () => {
     try {
@@ -209,8 +208,7 @@ router.get("/api/feeders", async (req, res) => {
 
 router.get("/api/auto-activation-requests", async (req, res) => {
   try {
-    const pendingSet = (app as any).pendingAutoActivationRequests;
-    const pendingRequests = pendingSet ? Array.from(pendingSet) : [];
+    const pendingRequests = Array.from(pendingAutoActivationRequests);
     res.json({
       success: true,
       data: {
@@ -233,7 +231,6 @@ router.get("/api/auto-activation-requests", async (req, res) => {
 router.post("/api/auto-activation/:feederId/confirm", async (req, res) => {
   try {
     const { feederId } = req.params;
-    const pendingRequests = (app as any).pendingAutoActivationRequests || new Set();
     
     console.log(`\n✅ USER CONFIRMED AUTO-ACTIVATION: Feeder ${feederId}`);
     console.log(`   Searching for available DERs...`);
@@ -276,7 +273,7 @@ router.post("/api/auto-activation/:feederId/confirm", async (req, res) => {
     );
     
     await Promise.all(activationPromises);
-    pendingRequests.delete(feederId);
+    pendingAutoActivationRequests.delete(feederId);
     
     console.log(`\n🎉 Auto-activation complete for ${feederId}\n`);
     
@@ -297,10 +294,9 @@ router.post("/api/auto-activation/:feederId/confirm", async (req, res) => {
 router.post("/api/auto-activation/:feederId/dismiss", async (req, res) => {
   try {
     const { feederId } = req.params;
-    const pendingRequests = (app as any).pendingAutoActivationRequests || new Set();
     
     console.log(`\n❌ USER DISMISSED AUTO-ACTIVATION: Feeder ${feederId}\n`);
-    pendingRequests.delete(feederId);
+    pendingAutoActivationRequests.delete(feederId);
     
     res.json({
       success: true,

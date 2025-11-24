@@ -63,7 +63,7 @@ export default function Feeders() {
     }, 5000);
     
     return () => clearInterval(interval);
-  }, [pendingAutoActivation]);
+  }, []);
 
   const mockFeeders = [
     {
@@ -264,7 +264,8 @@ export default function Feeders() {
   const warningFeeders = filteredFeeders.filter(f => f.status === "warning");
   const normalFeeders = filteredFeeders.filter(f => f.status === "normal");
 
-  const criticalFeeder = pendingAutoActivation ? feeders.find(f => f.id === pendingAutoActivation) : null;
+  // Find critical feeder - search in displayFeeders (which includes mock if real not loaded)
+  const criticalFeeder = pendingAutoActivation ? displayFeeders.find(f => f.id === pendingAutoActivation) : null;
 
   return (
     <div className="p-6 lg:p-8 space-y-8 max-w-[1600px] mx-auto">
