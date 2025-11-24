@@ -1,0 +1,20 @@
+
+You said:
+Solutions must be implemented using Beckn Protocol workflows. 
+Problem Statement 1: Utility Interface with Agentic Orchestration for Grid-Scale Demand Flexibility 
+Context: Utilities are increasingly unable to autonomously monitor and mitigate feeder-level spikes in real-time as distributed energy resources (DERs) proliferate behind-the-meter. Manual coordination is slow, expensive, and lacks visibility and traceability. 
+Challenge: Build an agent that acts as a reliable co-pilot with a 
+Command-Centre Dashboard interface for the DSOs (e.g. UK Power Networks) — forecast and manage local load flexibility at feeder/substation levels, aligned with Ofgem’s flexibility reforms. 
+Minimum Expected Capabilities: 
+● The agent must achieve a sub–5 second detection-to-dispatch SLA at feeder level, integrated with P415 VLP activation and traceable through OBP IDs for verifiable P444 settlement. 
+● Agents must implement Beckn Protocol workflows for the utility to discover available catalogues of subscribed DERs, optimise and activate the DERs to address the spike in demand 
+● Forecast localized grid overloads (e.g., at feeders or substations) using historical and real-time data. 
+● Coordinate with DERs to shift or shed load constrained by defined rules (e.g., home batteries discharge, EV charging deferment, heating load shifting). 
+● Maintain full audit logs: timestamped decisions, data sources, operator rule invoked, DER response, available for regulator review. 
+Note: Assume that the utility has published Demand Flexibility Programs, which have been subscribed by individuals & businesses, which forms the catalogue of DERs for this challenge.
+Good-to-Have Capabilities: 
+● Agent self-analyses exceptional scenarios and offers alternative pathways (e.g., multi-feeder failure). 
+● Differentiation between incentive-based vs emergency interventions (e.g., voluntary demand response escalation to forced curtailment). 
+Why this matters: Because the grid of the future cannot depend on human reflexes, it needs autonomous agents that sense, predict, and balance demand in real time to prevent blackouts and make flexibility a first-class operational asset.  can u add a chatbot to this, show active ders and which ones are not in use, the feeder data, their details on why they are critical and optional buttons to activate ders to get them under control and can u implement these API keys for me too from these website so real data is used, REFERENCES
+1.	https://www.neso.energy/data-portal/api-guidance
+2.	https://ukpowernetworks.opendatasoft.com/api/explore/v2.1/console, can u create all that for me pls with realy nice ui like not too dark colors just make it look good 
