@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -13,9 +13,32 @@ export default function Feeders() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedFeeder, setSelectedFeeder] = useState<any>(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [feeders, setFeeders] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
-  // TODO: remove mock data
+  // Fetch feeders from backend
+  useEffect(() => {
+    const fetchFeeders = async () => {
+      try {
+        const response = await fetch("/api/feeders");
+        const result = await response.json();
+        if (result.success) {
+          setFeeders(result.data);
+        }
+      } catch (error) {
+        console.error("Failed to fetch feeders:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchFeeders();
+    // Refresh feeders every 5 seconds to show real-time updates when DERs are activated
+    const interval = setInterval(fetchFeeders, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
   const mockFeeders = [
     {
       id: "F-1234",
@@ -89,7 +112,7 @@ export default function Feeders() {
   };
 
   const handleActivateDERsForFeeder = async (feederId: string) => {
-    const feeder = mockFeeders.find(f => f.id === feederId);
+    const feeder = feeders.find(f => f.id === feederId) || mockFeeders.find(f => f.id === feederId);
     if (!feeder) return;
 
     toast({
@@ -116,7 +139,7 @@ export default function Feeders() {
 
       const availableDERs = searchResult.data.slice(0, 3); // Select top 3 DERs
 
-      // Step 2: Activate DERs via BECKN Protocol
+      // Step 2: Activate DERs via BECKN Protocol (with feederId for load tracking)
       const activationPromises = availableDERs.map((der: any) =>
         fetch(`/api/der/${der.id}/activate`, {
           method: "POST",
@@ -124,7 +147,8 @@ export default function Feeders() {
           body: JSON.stringify({
             quantity: { amount: "25", unit: "kWh" },
             startTime: new Date().toISOString(),
-            endTime: new Date(Date.now() + 3600000).toISOString()
+            endTime: new Date(Date.now() + 3600000).toISOString(),
+            feederId: feederId // Pass feederId so backend tracks which feeder this reduces load for
           })
         })
       );
@@ -133,6 +157,13 @@ export default function Feeders() {
       const activationResults = await Promise.all(activationResponses.map(r => r.json()));
 
       const successfulActivations = activationResults.filter(r => r.success);
+
+      // Refresh feeders to show updated load
+      const refreshResponse = await fetch("/api/feeders");
+      const refreshResult = await refreshResponse.json();
+      if (refreshResult.success) {
+        setFeeders(refreshResult.data);
+      }
 
       toast({
         title: "DER Activation Successful",
@@ -149,7 +180,8 @@ export default function Feeders() {
     }
   };
 
-  const filteredFeeders = mockFeeders.filter(f => 
+  const displayFeeders = feeders.length > 0 ? feeders : mockFeeders;
+  const filteredFeeders = displayFeeders.filter(f => 
     f.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
     f.substationName.toLowerCase().includes(searchQuery.toLowerCase())
   );
@@ -167,7 +199,7 @@ export default function Feeders() {
         </div>
         <div className="flex items-center gap-4">
           <Badge variant="outline">
-            {mockFeeders.length} Total Feeders
+            {displayFeeders.length} Total Feeders
           </Badge>
           <Badge variant="destructive">
             {criticalFeeders.length} Critical

@@ -35,7 +35,19 @@ export default function AIAssistant() {
 
       // BECKN Activate - Activate DERs
       else if (lowerMessage.includes("activate") || lowerMessage.includes("enable") || lowerMessage.includes("turn on")) {
-        // Search first
+        // Get feeders first to find one that needs help
+        const feedersResponse = await fetch("/api/feeders");
+        const feedersResult = await feedersResponse.json();
+        const feeders = feedersResult.data || [];
+        
+        // Find a critical or warning feeder
+        const criticalFeeder = feeders.find((f: any) => f.status === "critical") || feeders.find((f: any) => f.status === "warning");
+        
+        if (!criticalFeeder) {
+          return { response: "No critical feeders need assistance at this time." };
+        }
+
+        // Search for DERs
         const searchResponse = await fetch("/api/der/search", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -49,22 +61,23 @@ export default function AIAssistant() {
         if (searchResult.success && searchResult.data.length > 0) {
           const der = searchResult.data[0];
           
-          // Activate the DER
+          // Activate the DER for the critical feeder
           const activateResponse = await fetch(`/api/der/${der.id}/activate`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               quantity: { amount: "50", unit: "kWh" },
               startTime: new Date().toISOString(),
-              endTime: new Date(Date.now() + 3600000).toISOString()
+              endTime: new Date(Date.now() + 3600000).toISOString(),
+              feederId: criticalFeeder.id
             })
           });
 
           const activateResult = await activateResponse.json();
           if (activateResult.success) {
             return {
-              response: `✅ DER Activation Successful via BECKN Protocol!\n\n**Resource:** ${der.name}\n**Type:** ${der.type}\n**Order ID:** ${activateResult.data.orderId}\n**Capacity:** ${der.capacity} kW\n**Estimated Cost:** $${50 * der.price_per_unit}\n\nThe resource is now active and providing grid services.`,
-              data: { orderId: activateResult.data.orderId, der }
+              response: `✅ DER Activation Successful via BECKN Protocol!\n\n**Resource:** ${der.name}\n**Type:** ${der.type}\n**Order ID:** ${activateResult.data.orderId}\n**Capacity:** ${der.capacity} kW\n**Assigned to Feeder:** ${criticalFeeder.name}\n**Load Reduction:** 50 kWh\n**Estimated Cost:** $${50 * der.price_per_unit}\n\nThe resource is now active and reducing load on ${criticalFeeder.name}.`,
+              data: { orderId: activateResult.data.orderId, der, feeder: criticalFeeder }
             };
           }
         }

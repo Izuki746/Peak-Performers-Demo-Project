@@ -58,7 +58,7 @@ router.post("/api/der/:id/select", async (req, res) => {
 router.post("/api/der/:id/activate", async (req, res) => {
   try {
     const { id } = req.params;
-    const { quantity, startTime, endTime } = req.body;
+    const { quantity, startTime, endTime, feederId } = req.body;
 
     // Step 1: Init
     const initResult = await beckn.initiateDERActivation(id, quantity, startTime, endTime);
@@ -72,6 +72,12 @@ router.post("/api/der/:id/activate", async (req, res) => {
       endTime
     );
 
+    // Step 3: Track DER activation and update feeder load
+    const output = parseFloat(quantity.amount);
+    if (feederId) {
+      await storage.activateDERForFeeder(id, feederId, output, confirmResult.orderId);
+    }
+
     res.json({
       success: true,
       data: confirmResult,
@@ -81,6 +87,22 @@ router.post("/api/der/:id/activate", async (req, res) => {
     res.status(500).json({
       success: false,
       error: "Failed to activate DER",
+    });
+  }
+});
+
+// Get Feeders with calculated loads
+router.get("/api/feeders", async (req, res) => {
+  try {
+    const feeders = await storage.getFeedersWithLoad();
+    res.json({
+      success: true,
+      data: feeders,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: "Failed to fetch feeders",
     });
   }
 });
