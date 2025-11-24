@@ -13,6 +13,47 @@ export async function registerRoutes(app: Express) {
   app.use(router);
 
   const server = createServer(app);
+  
+  // ============================================
+  // AUTO-DEACTIVATION MONITOR
+  // ============================================
+  // Checks every 30 seconds if feeders are under control
+  // If load drops below 75% capacity, automatically deactivates DERs
+  
+  const AUTO_DEACTIVATION_INTERVAL = 30000; // 30 seconds
+  const LOAD_THRESHOLD_PERCENT = 75; // Auto-deactivate when below 75% load
+  
+  setInterval(async () => {
+    try {
+      const feeders = await storage.getFeedersWithLoad();
+      const activeDERs = await storage.getAllActiveDERs();
+      
+      for (const feeder of feeders) {
+        const loadPercent = (feeder.currentLoad / feeder.capacity) * 100;
+        const feederActiveDERs = activeDERs.filter(d => d.feederId === feeder.id);
+        
+        // If load is under control and there are active DERs, deactivate them
+        if (loadPercent < LOAD_THRESHOLD_PERCENT && feederActiveDERs.length > 0) {
+          console.log(`\n⚡ AUTO-DEACTIVATION CHECK: Feeder ${feeder.id}`);
+          console.log(`   Current Load: ${feeder.currentLoad.toFixed(1)}/${feeder.capacity} kW (${loadPercent.toFixed(1)}%)`);
+          console.log(`   Status: Under Control - Deactivating ${feederActiveDERs.length} DER(s)`);
+          
+          for (const der of feederActiveDERs) {
+            await storage.deactivateDER(der.orderId);
+            console.log(`   ✅ DER ${der.derId} (Order ${der.orderId}) DEACTIVATED`);
+          }
+          
+          console.log(`   📊 New Load: ${feeder.currentLoad.toFixed(1)}/${feeder.capacity} kW\n`);
+        }
+      }
+    } catch (error) {
+      console.error("[AUTO-DEACTIVATION] Error:", error);
+    }
+  }, AUTO_DEACTIVATION_INTERVAL);
+  
+  console.log(`⚡ Auto-Deactivation Monitor started (checks every ${AUTO_DEACTIVATION_INTERVAL / 1000}s)`);
+  console.log(`   Threshold: ${LOAD_THRESHOLD_PERCENT}% of feeder capacity\n`);
+
   return server;
 }
 
@@ -102,6 +143,34 @@ router.post("/api/der/:id/activate", async (req, res) => {
     res.status(500).json({
       success: false,
       error: "Failed to activate DER",
+    });
+  }
+});
+
+// ============================================
+// DER DEACTIVATION ENDPOINT
+// ============================================
+
+router.post("/api/der/:orderId/deactivate", async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    
+    console.log(`\n🔴 DER DEACTIVATION REQUEST`);
+    console.log(`   Order ID: ${orderId}`);
+    
+    await storage.deactivateDER(orderId);
+    
+    console.log(`✅ DER DEACTIVATED - Load reduction removed\n`);
+    
+    res.json({
+      success: true,
+      message: `DER deactivated successfully`,
+    });
+  } catch (error) {
+    console.error(`❌ DER deactivation failed: ${String(error)}`);
+    res.status(500).json({
+      success: false,
+      error: "Failed to deactivate DER",
     });
   }
 });
