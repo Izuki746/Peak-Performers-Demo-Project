@@ -48,36 +48,54 @@ async function callSandboxAPI(action: string, payload: SandboxRequest): Promise<
   // Mock implementation - in production this would call the actual sandbox
   // const response = await fetch(`${BAP_SANDBOX_URL}/api/sandbox/${action}`, {...})
 
-  console.log(`[BAP Sandbox] ${action.toUpperCase()}: Sending Beckn-compliant request...`);
+  const timestamp = new Date().toISOString();
+  console.log(`\n[BAP Sandbox] ⏰ ${timestamp}`);
+  console.log(`[BAP Sandbox] 📤 SENDING: ${action.toUpperCase()}`);
+  console.log(`[BAP Sandbox] Transaction ID: ${payload.context.transaction_id}`);
+  console.log(`[BAP Sandbox] Message ID: ${payload.context.message_id}`);
+  console.log(`[BAP Sandbox] Domain: ${payload.context.domain}`);
 
   switch (action) {
     case "search":
+      const providers = [
+        {
+          id: "BPP-SOLAR-001",
+          descriptor: { name: "Solar Energy Provider" },
+          category_id: "SOLAR-PV",
+        },
+        {
+          id: "BPP-BATTERY-001",
+          descriptor: { name: "Battery Storage Provider" },
+          category_id: "BATTERY-STORAGE",
+        },
+        {
+          id: "BPP-DEMAND-001",
+          descriptor: { name: "Demand Response Aggregator" },
+          category_id: "DEMAND-RESPONSE",
+        },
+      ];
+      console.log(`[BAP Sandbox] 📥 RESPONSE: SEARCH`);
+      console.log(`[BAP Sandbox] ✅ Success: true`);
+      console.log(`[BAP Sandbox] 🏢 Providers found: ${providers.length}`);
+      providers.forEach((p, i) => {
+        console.log(`[BAP Sandbox]    ${i + 1}. ${p.descriptor.name} (${p.id})`);
+      });
       return {
         success: true,
-        providers: [
-          {
-            id: "BPP-SOLAR-001",
-            descriptor: { name: "Solar Energy Provider" },
-            category_id: "SOLAR-PV",
-          },
-          {
-            id: "BPP-BATTERY-001",
-            descriptor: { name: "Battery Storage Provider" },
-            category_id: "BATTERY-STORAGE",
-          },
-          {
-            id: "BPP-DEMAND-001",
-            descriptor: { name: "Demand Response Aggregator" },
-            category_id: "DEMAND-RESPONSE",
-          },
-        ],
+        providers,
       };
 
     case "select":
+      const selectionId = `SEL-${nanoid()}`;
+      console.log(`[BAP Sandbox] 📥 RESPONSE: SELECT`);
+      console.log(`[BAP Sandbox] ✅ Success: true`);
+      console.log(`[BAP Sandbox] 📋 Selection ID: ${selectionId}`);
+      console.log(`[BAP Sandbox] 💰 Quote: GBP 250.00`);
+      console.log(`[BAP Sandbox] ⏱️  Valid for: 30 minutes`);
       return {
         success: true,
         data: {
-          id: `SEL-${nanoid()}`,
+          id: selectionId,
           items: payload.message.items || [],
           quote: {
             price: { currency: "GBP", value: "250.00" },
@@ -87,34 +105,56 @@ async function callSandboxAPI(action: string, payload: SandboxRequest): Promise<
       };
 
     case "init":
+      const initOrderId = `ORD-${nanoid()}`;
+      console.log(`[BAP Sandbox] 📥 RESPONSE: INIT`);
+      console.log(`[BAP Sandbox] ✅ Success: true`);
+      console.log(`[BAP Sandbox] 📋 Order ID: ${initOrderId}`);
+      console.log(`[BAP Sandbox] 🔄 State: DRAFT (prepared, not yet active)`);
       return {
         success: true,
         data: {
-          id: `ORD-${nanoid()}`,
+          id: initOrderId,
           state: "DRAFT",
         },
       };
 
     case "confirm":
-      const orderId = payload.message.id || `ORD-${nanoid()}`;
+      const confirmOrderId = payload.message.id || `ORD-${nanoid()}`;
+      console.log(`[BAP Sandbox] 📥 RESPONSE: CONFIRM`);
+      console.log(`[BAP Sandbox] ✅ Success: true`);
+      console.log(`[BAP Sandbox] 📋 Order ID: ${confirmOrderId}`);
+      console.log(`[BAP Sandbox] 🔄 State: ACTIVE`);
+      console.log(`[BAP Sandbox] ✨ DER IS NOW ACTIVELY REDUCING LOAD`);
       return {
         success: true,
-        orderId,
+        orderId: confirmOrderId,
         state: "ACTIVE",
       };
 
     case "status":
+      const statusOrderId = payload.message.order_id;
+      console.log(`[BAP Sandbox] 📥 RESPONSE: STATUS`);
+      console.log(`[BAP Sandbox] ✅ Success: true`);
+      console.log(`[BAP Sandbox] 📋 Order ID: ${statusOrderId}`);
+      console.log(`[BAP Sandbox] 🔄 State: ACTIVE`);
+      console.log(`[BAP Sandbox] ✅ DER is running and providing load reduction`);
       return {
         success: true,
         state: "ACTIVE",
-        orderId: payload.message.order_id,
+        orderId: statusOrderId,
       };
 
     case "cancel":
+      const cancelOrderId = payload.message.order_id;
+      console.log(`[BAP Sandbox] 📥 RESPONSE: CANCEL`);
+      console.log(`[BAP Sandbox] ✅ Success: true`);
+      console.log(`[BAP Sandbox] 📋 Order ID: ${cancelOrderId}`);
+      console.log(`[BAP Sandbox] 🔄 State: CANCELLED`);
+      console.log(`[BAP Sandbox] ⏹️  DER deactivated`);
       return {
         success: true,
         state: "CANCELLED",
-        orderId: payload.message.order_id,
+        orderId: cancelOrderId,
       };
 
     default:
@@ -197,48 +237,68 @@ export async function executeFullBecknjJourney(
   fulfillmentType: string,
   quantity: { amount: string; unit: string }
 ): Promise<SandboxResponse> {
-  console.log("\n[BAP Sandbox Agent] Starting Beckn Journey through BAP Sandbox...\n");
+  console.log("\n" + "=".repeat(70));
+  console.log("🚀 BECKN JOURNEY - COMPLETE WORKFLOW");
+  console.log("=".repeat(70));
+  console.log(`⏰ Started: ${new Date().toISOString()}`);
+  console.log(`📝 Fulfillment Type: ${fulfillmentType}`);
+  console.log(`📦 Quantity: ${quantity.amount} ${quantity.unit}`);
 
   try {
-    // Step 1: DISCOVER - Find active subscribers
-    console.log("1️⃣  DISCOVER - Finding active DER subscribers...");
+    // Step 1: DISCOVER
+    console.log("\n" + "-".repeat(70));
+    console.log("STEP 1️⃣  DISCOVER - Finding active DER subscribers");
+    console.log("-".repeat(70));
     const discoverRes = await discoverDERs(fulfillmentType);
     if (!discoverRes.success || !discoverRes.providers?.length) {
       throw new Error("No providers found");
     }
     const provider = discoverRes.providers[0];
-    console.log(`   ✅ Found ${discoverRes.providers.length} providers`);
-    console.log(`   Selected: ${provider.descriptor.name}\n`);
 
-    // Step 2: SELECT - Choose provider
-    console.log("2️⃣  SELECT - Selecting provider and resources...");
+    // Step 2: SELECT
+    console.log("\n" + "-".repeat(70));
+    console.log("STEP 2️⃣  SELECT - Selecting provider and resources");
+    console.log("-".repeat(70));
+    console.log(`[Agent] Selecting provider: ${provider.descriptor.name}`);
     const selectRes = await selectDER(provider.id, quantity);
     if (!selectRes.success) throw new Error("Selection failed");
-    console.log(`   ✅ Provider selected with quote: ${selectRes.data?.quote?.price?.value}\n`);
 
-    // Step 3: INIT - Prepare order
-    console.log("3️⃣  INIT - Initializing order...");
+    // Step 3: INIT
+    console.log("\n" + "-".repeat(70));
+    console.log("STEP 3️⃣  INIT - Initializing order");
+    console.log("-".repeat(70));
     const now = new Date();
     const startTime = now.toISOString();
     const endTime = new Date(now.getTime() + 3600000).toISOString();
+    console.log(`[Agent] Start Time: ${startTime}`);
+    console.log(`[Agent] End Time: ${endTime}`);
     const initRes = await initOrder(provider.id, startTime, endTime);
     if (!initRes.success) throw new Error("Init failed");
     const orderId = initRes.data?.id || `ORD-${nanoid()}`;
-    console.log(`   ✅ Order initialized: ${orderId}\n`);
 
-    // Step 4: CONFIRM - Execute order
-    console.log("4️⃣  CONFIRM - Confirming and activating...");
+    // Step 4: CONFIRM
+    console.log("\n" + "-".repeat(70));
+    console.log("STEP 4️⃣  CONFIRM - Confirming and activating DER");
+    console.log("-".repeat(70));
+    console.log(`[Agent] Confirming Order: ${orderId}`);
     const confirmRes = await confirmOrder(orderId, provider.id);
     if (!confirmRes.success) throw new Error("Confirmation failed");
-    console.log(`   ✅ Order CONFIRMED and ACTIVE\n`);
 
-    // Step 5: STATUS - Verify
-    console.log("5️⃣  STATUS - Verifying order status...");
+    // Step 5: STATUS
+    console.log("\n" + "-".repeat(70));
+    console.log("STEP 5️⃣  STATUS - Verifying final status");
+    console.log("-".repeat(70));
     const statusRes = await checkOrderStatus(orderId);
     if (!statusRes.success) throw new Error("Status check failed");
-    console.log(`   ✅ Status: ${statusRes.state}\n`);
 
-    console.log("🎯 Beckn Journey Complete! DER activated through BAP Sandbox.\n");
+    console.log("\n" + "=".repeat(70));
+    console.log("✅ BECKN JOURNEY COMPLETE!");
+    console.log("=".repeat(70));
+    console.log(`📋 Order ID: ${orderId}`);
+    console.log(`🏢 Provider: ${provider.descriptor.name}`);
+    console.log(`🔄 Final State: ${statusRes.state}`);
+    console.log(`⏰ Completed: ${new Date().toISOString()}`);
+    console.log("=".repeat(70) + "\n");
 
     return {
       success: true,
@@ -251,7 +311,11 @@ export async function executeFullBecknjJourney(
       },
     };
   } catch (error) {
-    console.error(`\n❌ Journey failed: ${String(error)}\n`);
+    console.log("\n" + "=".repeat(70));
+    console.log("❌ BECKN JOURNEY FAILED!");
+    console.log("=".repeat(70));
+    console.error(`Error: ${String(error)}`);
+    console.log("=".repeat(70) + "\n");
     return { success: false, error: String(error) };
   }
 }

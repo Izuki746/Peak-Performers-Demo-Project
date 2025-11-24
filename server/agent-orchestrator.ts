@@ -111,29 +111,41 @@ export function analyzeProblem(problem: GridProblem): AgentDecision[] {
 export async function orchestrateGridResponse(problem: GridProblem): Promise<OrchestrationResult> {
   const startTime = Date.now();
 
-  console.log("\n" + "=".repeat(60));
-  console.log("AGENT ORCHESTRATOR - ANALYZING GRID PROBLEM");
-  console.log("=".repeat(60));
-  console.log(`\nProblem: ${problem.description}`);
-  console.log(`Urgency: ${problem.urgency.toUpperCase()}`);
-  console.log(`Feeder: ${problem.feederId || "N/A"}`);
+  console.log("\n");
+  console.log("╔" + "═".repeat(68) + "╗");
+  console.log("║" + " 🤖 AGENT ORCHESTRATOR - GRID PROBLEM ANALYSIS".padEnd(69) + "║");
+  console.log("╚" + "═".repeat(68) + "╝");
+  
+  console.log(`\n⏰ Started: ${new Date().toISOString()}`);
+  console.log(`\n📋 PROBLEM DETAILS:`);
+  console.log(`   Type: ${problem.type}`);
+  console.log(`   Description: ${problem.description}`);
+  console.log(`   Urgency: 🔴 ${problem.urgency.toUpperCase()}`);
+  console.log(`   Feeder: ${problem.feederId || "N/A"}`);
+  console.log(`   Substation: ${problem.substationId || "N/A"}`);
+  if (problem.currentLoad && problem.capacity) {
+    const percentage = ((problem.currentLoad / problem.capacity) * 100).toFixed(1);
+    console.log(`   Load: ${problem.currentLoad}/${problem.capacity} MW (${percentage}%)`);
+  }
 
   const decisions = analyzeProblem(problem);
 
-  console.log(`\n📋 Agent Decision Plan:`);
+  console.log(`\n📊 AGENT DECISION PLAN (${decisions.length} steps):`);
   decisions.forEach((d) => {
-    console.log(`   ${d.step}. ${d.action.toUpperCase()}`);
+    console.log(`   └─ Step ${d.step}: ${d.action.toUpperCase()}`);
+    console.log(`      └─ Reasoning: ${d.reasoning}`);
   });
 
-  console.log("\n" + "-".repeat(60));
-  console.log("EXECUTING BECKN JOURNEY THROUGH BAP SANDBOX");
-  console.log("-".repeat(60));
+  console.log("\n" + "┌" + "─".repeat(68) + "┐");
+  console.log("│" + " EXECUTING BECKN JOURNEY THROUGH BAP SANDBOX".padEnd(69) + "│");
+  console.log("└" + "─".repeat(68) + "┘");
 
   try {
     let orderId: string | undefined;
 
     // For critical/high urgency, execute full journey
     if (problem.urgency === "critical" || problem.urgency === "high") {
+      console.log(`\n⚡ CRITICAL/HIGH URGENCY: Executing full Beckn journey immediately`);
       const journeyResult = await bapSandbox.executeFullBecknjJourney("energy-dispatch", {
         amount: Math.round((problem.capacity || 100) * 0.5).toString(),
         unit: "kWh",
@@ -144,12 +156,15 @@ export async function orchestrateGridResponse(problem: GridProblem): Promise<Orc
       }
 
       orderId = journeyResult.orderId;
+      console.log(`\n✨ DER SUCCESSFULLY ACTIVATED: ${orderId}`);
     } else {
       // For medium/low urgency, just discover
+      console.log(`\n📊 MEDIUM/LOW URGENCY: Discovering available resources`);
       const discoverResult = await bapSandbox.discoverDERs("energy-dispatch");
       if (!discoverResult.success) {
         throw new Error("DER discovery failed");
       }
+      console.log(`✅ Found ${discoverResult.providers?.length || 0} available providers`);
     }
 
     const executionTime = Date.now() - startTime;
@@ -167,25 +182,31 @@ export async function orchestrateGridResponse(problem: GridProblem): Promise<Orc
           : "DER capacity assessed and ready",
     };
 
-    console.log("\n" + "=".repeat(60));
-    console.log("ORCHESTRATION RESULT");
-    console.log("=".repeat(60));
-    console.log(`Status: ${result.message}`);
+    console.log("\n╔" + "═".repeat(68) + "╗");
+    console.log("║" + " ✅ ORCHESTRATION COMPLETE".padEnd(69) + "║");
+    console.log("╚" + "═".repeat(68) + "╝");
+    console.log(`\n📊 RESULTS:`);
+    console.log(`   Status: ${result.message}`);
     if (result.orderId) {
-      console.log(`Order ID: ${result.orderId}`);
+      console.log(`   Order ID: ${result.orderId}`);
+      console.log(`   Load Reduction: ACTIVE`);
     }
-    console.log(`Time: ${executionTime}ms`);
-    console.log("=".repeat(60) + "\n");
+    console.log(`   Execution Time: ${executionTime}ms`);
+    console.log(`   Completed: ${new Date().toISOString()}`);
+    console.log("\n");
 
     return result;
   } catch (error) {
     const executionTime = Date.now() - startTime;
 
-    console.log("\n" + "=".repeat(60));
-    console.log("ORCHESTRATION ERROR");
-    console.log("=".repeat(60));
-    console.log(`Error: ${String(error)}`);
-    console.log("=".repeat(60) + "\n");
+    console.log("\n╔" + "═".repeat(68) + "╗");
+    console.log("║" + " ❌ ORCHESTRATION ERROR".padEnd(69) + "║");
+    console.log("╚" + "═".repeat(68) + "╝");
+    console.log(`\n⚠️  ERROR DETAILS:`);
+    console.log(`   Error: ${String(error)}`);
+    console.log(`   Execution Time: ${executionTime}ms`);
+    console.log(`   Time: ${new Date().toISOString()}`);
+    console.log("\n");
 
     return {
       success: false,
