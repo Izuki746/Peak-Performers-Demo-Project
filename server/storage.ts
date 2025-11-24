@@ -24,6 +24,16 @@ interface FeederWithCalculatedLoad {
   activeDERs?: ActiveDER[]; // List of DERs actively helping this feeder
 }
 
+interface AuditLog {
+  id: string;
+  timestamp: Date;
+  action: string;
+  user: string;
+  target: string;
+  status: "success" | "error" | "info";
+  description: string;
+}
+
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
@@ -33,11 +43,14 @@ export interface IStorage {
   getActiveDERsForFeeder(feederId: string): Promise<ActiveDER[]>;
   getAllActiveDERs(): Promise<ActiveDER[]>;
   getFeedersWithLoad(): Promise<FeederWithCalculatedLoad[]>;
+  addAuditLog(action: string, user: string, target: string, status: "success" | "error" | "info", description: string): Promise<AuditLog>;
+  getAuditLogs(): Promise<AuditLog[]>;
 }
 
 export class MemStorage implements IStorage {
   private users: Map<string, User>;
   private activeDERs: Map<string, ActiveDER>; // key: orderId
+  private auditLogs: AuditLog[] = [];
   private mockFeeders: FeederWithCalculatedLoad[] = [
     {
       id: "F-1234",
@@ -206,6 +219,25 @@ export class MemStorage implements IStorage {
         activeDERs: activeDERs
       };
     });
+  }
+
+  async addAuditLog(action: string, user: string, target: string, status: "success" | "error" | "info", description: string): Promise<AuditLog> {
+    const logId = `LOG-${randomUUID().substring(0, 8).toUpperCase()}`;
+    const log: AuditLog = {
+      id: logId,
+      timestamp: new Date(),
+      action,
+      user,
+      target,
+      status,
+      description
+    };
+    this.auditLogs.unshift(log); // Add to beginning (newest first)
+    return log;
+  }
+
+  async getAuditLogs(): Promise<AuditLog[]> {
+    return this.auditLogs;
   }
 }
 

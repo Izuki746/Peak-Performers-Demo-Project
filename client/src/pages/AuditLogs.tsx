@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -6,10 +6,47 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { FileText, Search, Filter } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
+interface AuditLog {
+  id: string;
+  timestamp: Date | string;
+  action: string;
+  user: string;
+  target: string;
+  status: "success" | "error" | "info";
+  description: string;
+}
+
 export default function AuditLogs() {
   const [searchQuery, setSearchQuery] = useState("");
+  const [logs, setLogs] = useState<AuditLog[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // TODO: remove mock data
+  useEffect(() => {
+    const fetchLogs = async () => {
+      try {
+        const response = await fetch("/api/audit-logs");
+        const result = await response.json();
+        if (result.success && result.data) {
+          // Convert timestamp strings to Date objects
+          const parsedLogs = result.data.map((log: any) => ({
+            ...log,
+            timestamp: typeof log.timestamp === "string" ? new Date(log.timestamp) : log.timestamp
+          }));
+          setLogs(parsedLogs);
+        }
+      } catch (error) {
+        console.error("Failed to fetch audit logs:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchLogs();
+    // Refresh logs every 5 seconds
+    const interval = setInterval(fetchLogs, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
   const mockLogs = [
     {
       id: "LOG-001",
@@ -142,7 +179,9 @@ export default function AuditLogs() {
     }
   };
 
-  const filteredLogs = mockLogs.filter(log =>
+  const displayLogs = logs.length > 0 ? logs : mockLogs;
+  
+  const filteredLogs = displayLogs.filter(log =>
     log.action.toLowerCase().includes(searchQuery.toLowerCase()) ||
     log.user.toLowerCase().includes(searchQuery.toLowerCase()) ||
     log.target.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -170,7 +209,7 @@ export default function AuditLogs() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-muted-foreground mb-1">Total Events</p>
-              <p className="text-2xl font-bold">{mockLogs.length}</p>
+              <p className="text-2xl font-bold">{displayLogs.length}</p>
             </div>
             <Badge className="bg-blue-600">All Time</Badge>
           </div>

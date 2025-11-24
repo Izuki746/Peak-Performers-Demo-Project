@@ -277,6 +277,15 @@ router.post("/api/auto-activation/:feederId/confirm", async (req, res) => {
     
     console.log(`\n🎉 Auto-activation complete for ${feederId}\n`);
     
+    // Log the action
+    await storage.addAuditLog(
+      "Auto-Activation Confirmed",
+      "Operator: System User",
+      `Feeder ${feederId}`,
+      "success",
+      `User confirmed auto-activation and activated ${availableDERs.length} DER(s) via Beckn Protocol`
+    );
+    
     res.json({
       success: true,
       message: `Auto-activated DERs for feeder ${feederId}`,
@@ -298,6 +307,15 @@ router.post("/api/auto-activation/:feederId/dismiss", async (req, res) => {
     console.log(`\n❌ USER DISMISSED AUTO-ACTIVATION: Feeder ${feederId}\n`);
     pendingAutoActivationRequests.delete(feederId);
     
+    // Log the action
+    await storage.addAuditLog(
+      "Auto-Activation Dismissed",
+      "Operator: System User",
+      `Feeder ${feederId}`,
+      "info",
+      "User dismissed auto-activation alert for critical feeder"
+    );
+    
     res.json({
       success: true,
       message: `Dismissed auto-activation request for feeder ${feederId}`,
@@ -306,6 +324,26 @@ router.post("/api/auto-activation/:feederId/dismiss", async (req, res) => {
     res.status(500).json({
       success: false,
       error: "Failed to dismiss auto-activation request",
+    });
+  }
+});
+
+// ============================================
+// AUDIT LOG ENDPOINTS
+// ============================================
+
+router.get("/api/audit-logs", async (req, res) => {
+  try {
+    const logs = await storage.getAuditLogs();
+    res.json({
+      success: true,
+      data: logs,
+    });
+  } catch (error) {
+    console.error("[AUDIT-LOG] Error fetching logs:", error);
+    res.status(500).json({
+      success: false,
+      error: "Failed to fetch audit logs",
     });
   }
 });
