@@ -60,26 +60,45 @@ router.post("/api/der/:id/activate", async (req, res) => {
     const { id } = req.params;
     const { quantity, startTime, endTime, feederId } = req.body;
 
-    const initResult = await beckn.initiateDERActivation(id, quantity, startTime, endTime);
-    const confirmResult = await beckn.confirmDERActivation(
-      id,
-      initResult.orderId,
-      quantity,
-      startTime,
-      endTime
+    console.log(`\n🔌 DER ACTIVATION REQUEST: ${id}`);
+    console.log(`   Requested Quantity: ${quantity?.amount} ${quantity?.unit}`);
+    console.log(`   Feeder: ${feederId || "N/A"}`);
+
+    // Execute full Beckn journey through BAP Sandbox for complete workflow
+    const journeyResult = await bapSandbox.executeFullBecknjJourney(
+      "energy-dispatch",
+      quantity || { amount: "50", unit: "kWh" }
     );
 
-    const output = parseFloat(quantity.amount);
-    if (feederId) {
-      await storage.activateDERForFeeder(id, feederId, output, confirmResult.orderId);
+    if (!journeyResult.success) {
+      throw new Error("Beckn journey failed");
     }
+
+    const output = parseFloat(quantity?.amount || "50");
+    if (feederId) {
+      console.log(`   💾 Recording load reduction on feeder: ${feederId}`);
+      await storage.activateDERForFeeder(id, feederId, output, journeyResult.orderId);
+      console.log(`   ✅ Feeder load updated - currentLoad reduced by ${output}kW`);
+    }
+
+    console.log(`\n✨ DER ${id} ACTIVATED`);
+    console.log(`   Order ID: ${journeyResult.orderId}`);
+    console.log(`   Status: ACTIVE`);
+    console.log(`   Load Reduction: ${output} kW\n`);
 
     res.json({
       success: true,
-      data: confirmResult,
+      data: {
+        orderId: journeyResult.orderId,
+        derId: id,
+        status: "ACTIVE",
+        output,
+        message: `DER ${id} activated via complete Beckn journey`
+      },
       message: `DER ${id} activated successfully via BECKN Protocol`,
     });
   } catch (error) {
+    console.error(`❌ DER activation failed: ${String(error)}`);
     res.status(500).json({
       success: false,
       error: "Failed to activate DER",
