@@ -22,6 +22,11 @@ export async function registerRoutes(app: Express) {
   
   const AUTO_DEACTIVATION_INTERVAL = 30000; // 30 seconds
   const LOAD_THRESHOLD_PERCENT = 75; // Auto-deactivate when below 75% load
+  const CRITICAL_LOAD_PERCENT = 90; // Request user activation when above 90% load
+  const pendingAutoActivationRequests = new Set<string>(); // Track which feeders are pending user confirmation
+  
+  // Store pending requests globally so frontend can access them
+  (app as any).pendingAutoActivationRequests = pendingAutoActivationRequests;
   
   setInterval(async () => {
     try {
@@ -44,6 +49,14 @@ export async function registerRoutes(app: Express) {
           }
           
           console.log(`   📊 New Load: ${feeder.currentLoad.toFixed(1)}/${feeder.capacity} kW\n`);
+          pendingAutoActivationRequests.delete(feeder.id); // Clear any pending request
+        }
+        // If load is critical and NO DERs are active, request user activation
+        else if (loadPercent > CRITICAL_LOAD_PERCENT && feederActiveDERs.length === 0 && !pendingAutoActivationRequests.has(feeder.id)) {
+          console.log(`\n🚨 CRITICAL LOAD DETECTED: Feeder ${feeder.id}`);
+          console.log(`   Current Load: ${feeder.currentLoad.toFixed(1)}/${feeder.capacity} kW (${loadPercent.toFixed(1)}%)`);
+          console.log(`   Status: CRITICAL - Requesting user confirmation to activate DERs`);
+          pendingAutoActivationRequests.add(feeder.id);
         }
       }
     } catch (error) {
@@ -186,6 +199,117 @@ router.get("/api/feeders", async (req, res) => {
     res.status(500).json({
       success: false,
       error: "Failed to fetch feeders",
+    });
+  }
+});
+
+// ============================================
+// AUTO-ACTIVATION ENDPOINTS
+// ============================================
+
+router.get("/api/auto-activation-requests", async (req, res) => {
+  try {
+    const pendingSet = (app as any).pendingAutoActivationRequests;
+    const pendingRequests = pendingSet ? Array.from(pendingSet) : [];
+    res.json({
+      success: true,
+      data: {
+        pendingFeeders: pendingRequests,
+        count: pendingRequests.length
+      }
+    });
+  } catch (error) {
+    console.error("[AUTO-ACTIVATION] Error fetching requests:", error);
+    res.json({
+      success: true,
+      data: {
+        pendingFeeders: [],
+        count: 0
+      }
+    });
+  }
+});
+
+router.post("/api/auto-activation/:feederId/confirm", async (req, res) => {
+  try {
+    const { feederId } = req.params;
+    const pendingRequests = (app as any).pendingAutoActivationRequests || new Set();
+    
+    console.log(`\n✅ USER CONFIRMED AUTO-ACTIVATION: Feeder ${feederId}`);
+    console.log(`   Searching for available DERs...`);
+    
+    // Get feeder info
+    const feeders = await storage.getFeedersWithLoad();
+    const feeder = feeders.find(f => f.id === feederId);
+    
+    if (!feeder) {
+      return res.status(404).json({
+        success: false,
+        error: "Feeder not found",
+      });
+    }
+    
+    // Search for DERs
+    const searchResponse = await beckn.searchDERs("energy-dispatch", {
+      amount: Math.round((feeder.capacity - feeder.currentLoad) * 0.8).toString(),
+      unit: "kWh"
+    });
+    
+    const availableDERs = searchResponse.slice(0, 2); // Activate top 2 DERs
+    console.log(`   Found ${availableDERs.length} available DERs`);
+    
+    // Activate DERs
+    const activationPromises = availableDERs.map((der: any) =>
+      (async () => {
+        const journeyResult = await bapSandbox.executeFullBecknjJourney(
+          "energy-dispatch",
+          { amount: "25", unit: "kWh" }
+        );
+        
+        if (journeyResult.success) {
+          await storage.activateDERForFeeder(der.id, feederId, 25, journeyResult.orderId);
+          console.log(`   ✅ DER ${der.id} ACTIVATED (Order: ${journeyResult.orderId})`);
+          return journeyResult;
+        }
+        throw new Error("Journey failed");
+      })()
+    );
+    
+    await Promise.all(activationPromises);
+    pendingRequests.delete(feederId);
+    
+    console.log(`\n🎉 Auto-activation complete for ${feederId}\n`);
+    
+    res.json({
+      success: true,
+      message: `Auto-activated DERs for feeder ${feederId}`,
+      dersActivated: availableDERs.length
+    });
+  } catch (error) {
+    console.error(`❌ Auto-activation failed: ${String(error)}`);
+    res.status(500).json({
+      success: false,
+      error: "Failed to auto-activate DERs",
+    });
+  }
+});
+
+router.post("/api/auto-activation/:feederId/dismiss", async (req, res) => {
+  try {
+    const { feederId } = req.params;
+    const pendingRequests = (app as any).pendingAutoActivationRequests || new Set();
+    
+    console.log(`\n❌ USER DISMISSED AUTO-ACTIVATION: Feeder ${feederId}\n`);
+    pendingRequests.delete(feederId);
+    
+    res.json({
+      success: true,
+      message: `Dismissed auto-activation request for feeder ${feederId}`,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: "Failed to dismiss auto-activation request",
     });
   }
 });

@@ -1,7 +1,7 @@
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { AlertCircle, CheckCircle, Info } from "lucide-react";
+import { AlertCircle, CheckCircle, Info, Zap } from "lucide-react";
 
 interface FeederCardProps {
   id: string;
@@ -12,6 +12,7 @@ interface FeederCardProps {
   status: "normal" | "warning" | "critical";
   criticality: "critical" | "high" | "medium" | "low";
   connectedDERs: number;
+  activeDERs?: any[];
   onViewDetails?: () => void;
   onActivateDERs?: () => void;
 }
@@ -25,6 +26,7 @@ export default function FeederCard({
   status,
   criticality,
   connectedDERs,
+  activeDERs = [],
   onViewDetails,
   onActivateDERs
 }: FeederCardProps) {
@@ -87,9 +89,18 @@ export default function FeederCard({
         <div className="flex items-center justify-between text-xs">
           <span className="text-muted-foreground flex items-center gap-1">
             <Info className="h-3 w-3" />
-            {connectedDERs} DERs connected
+            {connectedDERs} connected
           </span>
         </div>
+
+        {activeDERs && activeDERs.length > 0 && (
+          <div className="flex items-center gap-2 p-2 bg-accent/20 rounded-md">
+            <Zap className="h-3 w-3 text-accent-foreground" />
+            <span className="text-xs font-medium text-accent-foreground">
+              {activeDERs.length} DER{activeDERs.length !== 1 ? 's' : ''} Active
+            </span>
+          </div>
+        )}
 
         <div className="flex gap-2">
           <Button 

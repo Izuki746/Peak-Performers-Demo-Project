@@ -3,10 +3,11 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import FeederCard from "@/components/FeederCard";
 import FeederDetailModal from "@/components/FeederDetailModal";
-import { Search, Filter } from "lucide-react";
+import { Search, Filter, AlertCircle } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export default function Feeders() {
@@ -15,9 +16,11 @@ export default function Feeders() {
   const [modalOpen, setModalOpen] = useState(false);
   const [feeders, setFeeders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [pendingAutoActivation, setPendingAutoActivation] = useState<string | null>(null);
+  const [confirmingActivation, setConfirmingActivation] = useState(false);
   const { toast } = useToast();
 
-  // Fetch feeders from backend
+  // Fetch feeders and check for auto-activation requests
   useEffect(() => {
     const fetchFeeders = async () => {
       try {
@@ -33,11 +36,34 @@ export default function Feeders() {
       }
     };
 
+    const checkAutoActivationRequests = async () => {
+      try {
+        const response = await fetch("/api/auto-activation-requests");
+        const result = await response.json();
+        if (result.success && result.data.pendingFeeders.length > 0) {
+          const feederId = result.data.pendingFeeders[0];
+          if (feederId !== pendingAutoActivation) {
+            setPendingAutoActivation(feederId);
+          }
+        } else if (result.data.count === 0) {
+          setPendingAutoActivation(null);
+        }
+      } catch (error) {
+        console.error("Failed to check auto-activation requests:", error);
+      }
+    };
+
     fetchFeeders();
-    // Refresh feeders every 5 seconds to show real-time updates when DERs are activated
-    const interval = setInterval(fetchFeeders, 5000);
+    checkAutoActivationRequests();
+    
+    // Refresh feeders every 5 seconds and check for auto-activation requests
+    const interval = setInterval(() => {
+      fetchFeeders();
+      checkAutoActivationRequests();
+    }, 5000);
+    
     return () => clearInterval(interval);
-  }, []);
+  }, [pendingAutoActivation]);
 
   const mockFeeders = [
     {
@@ -109,6 +135,54 @@ export default function Feeders() {
       title: "Loading Feeder Details",
       description: `Opening details for ${feeder.name}`,
     });
+  };
+
+  const handleAutoActivationConfirm = async (feederId: string) => {
+    setConfirmingActivation(true);
+    try {
+      const response = await fetch(`/api/auto-activation/${feederId}/confirm`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" }
+      });
+      
+      const result = await response.json();
+      if (result.success) {
+        toast({
+          title: "DERs Activated",
+          description: `${result.dersActivated} DERs automatically activated for this feeder`,
+          variant: "default",
+        });
+        setPendingAutoActivation(null);
+        
+        // Refresh feeders to show updated load
+        const refreshResponse = await fetch("/api/feeders");
+        const refreshResult = await refreshResponse.json();
+        if (refreshResult.success) {
+          setFeeders(refreshResult.data);
+        }
+      }
+    } catch (error) {
+      console.error("Auto-activation error:", error);
+      toast({
+        title: "Auto-activation Failed",
+        description: "Failed to activate DERs automatically",
+        variant: "destructive",
+      });
+    } finally {
+      setConfirmingActivation(false);
+    }
+  };
+
+  const handleAutoActivationDismiss = async (feederId: string) => {
+    try {
+      await fetch(`/api/auto-activation/${feederId}/dismiss`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" }
+      });
+      setPendingAutoActivation(null);
+    } catch (error) {
+      console.error("Dismiss error:", error);
+    }
   };
 
   const handleActivateDERsForFeeder = async (feederId: string) => {
@@ -190,8 +264,41 @@ export default function Feeders() {
   const warningFeeders = filteredFeeders.filter(f => f.status === "warning");
   const normalFeeders = filteredFeeders.filter(f => f.status === "normal");
 
+  const criticalFeeder = pendingAutoActivation ? feeders.find(f => f.id === pendingAutoActivation) : null;
+
   return (
     <div className="p-6 lg:p-8 space-y-8 max-w-[1600px] mx-auto">
+      {criticalFeeder && (
+        <Card className="p-4 border-destructive bg-destructive/5 flex items-start gap-4">
+          <AlertCircle className="h-5 w-5 text-destructive flex-shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <h3 className="font-semibold text-destructive mb-1">Critical Load Detected</h3>
+            <p className="text-sm text-muted-foreground mb-3">
+              Feeder <span className="font-medium">{criticalFeeder.name}</span> is running at {((criticalFeeder.currentLoad / criticalFeeder.capacity) * 100).toFixed(1)}% capacity. 
+              Activate DERs to reduce load?
+            </p>
+            <div className="flex gap-2">
+              <Button 
+                size="sm" 
+                onClick={() => handleAutoActivationConfirm(criticalFeeder.id)}
+                disabled={confirmingActivation}
+                data-testid="button-confirm-auto-activation"
+              >
+                {confirmingActivation ? "Activating..." : "Yes, Activate DERs"}
+              </Button>
+              <Button 
+                size="sm" 
+                variant="outline"
+                onClick={() => handleAutoActivationDismiss(criticalFeeder.id)}
+                data-testid="button-dismiss-auto-activation"
+              >
+                Dismiss
+              </Button>
+            </div>
+          </div>
+        </Card>
+      )}
+
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold mb-2">Feeder Management</h1>

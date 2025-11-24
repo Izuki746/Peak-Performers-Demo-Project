@@ -21,6 +21,7 @@ interface FeederWithCalculatedLoad {
   criticality: "critical" | "high" | "medium" | "low";
   connectedDERs: number;
   activeDERContribution: number; // total kW from active DERs
+  activeDERs?: ActiveDER[]; // List of DERs actively helping this feeder
 }
 
 export interface IStorage {
@@ -197,10 +198,14 @@ export class MemStorage implements IStorage {
   }
 
   async getFeedersWithLoad(): Promise<FeederWithCalculatedLoad[]> {
-    return this.mockFeeders.map(feeder => ({
-      ...feeder,
-      currentLoad: Math.max(0, feeder.baseLoad - feeder.activeDERContribution)
-    }));
+    return this.mockFeeders.map(feeder => {
+      const activeDERs = Array.from(this.activeDERs.values()).filter(d => d.feederId === feeder.id);
+      return {
+        ...feeder,
+        currentLoad: Math.max(0, feeder.baseLoad - feeder.activeDERContribution),
+        activeDERs: activeDERs
+      };
+    });
   }
 }
 
