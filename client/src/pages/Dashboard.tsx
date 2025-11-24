@@ -5,38 +5,51 @@ import { useToast } from "@/hooks/use-toast";
 import StatusCard from "@/components/StatusCard";
 import DERCard from "@/components/DERCard";
 import AlertBanner from "@/components/AlertBanner";
-import { Zap, Activity, Battery, Clock } from "lucide-react";
+import { Zap, Activity, Battery, Clock, Globe, Server } from "lucide-react";
 
 export default function Dashboard() {
   const [activatingDER, setActivatingDER] = useState<string | null>(null);
   const [mockDERs, setMockDERs] = useState<any[]>([]);
+  const [externalData, setExternalData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
-  // Fetch DERs from BECKN API on component mount
+  // Fetch DERs from BECKN API and external grid data on component mount
   useEffect(() => {
-    const fetchDERs = async () => {
+    const fetchData = async () => {
       try {
-        const response = await fetch("/api/der/search", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            fulfillmentType: "energy-dispatch",
-            quantity: { amount: "100", unit: "kWh" }
-          })
-        });
-        const result = await response.json();
-        if (result.success) {
-          setMockDERs(result.data);
+        const [derResponse, dashboardResponse] = await Promise.all([
+          fetch("/api/der/search", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              fulfillmentType: "energy-dispatch",
+              quantity: { amount: "100", unit: "kWh" }
+            })
+          }),
+          fetch("/api/external/dashboard")
+        ]);
+        
+        const derResult = await derResponse.json();
+        const dashboardResult = await dashboardResponse.json();
+        
+        if (derResult.success) {
+          setMockDERs(derResult.data);
+        }
+        if (dashboardResult.success) {
+          setExternalData(dashboardResult.data);
         }
       } catch (error) {
-        console.error("Failed to fetch DERs:", error);
+        console.error("Failed to fetch data:", error);
       } finally {
         setLoading(false);
       }
     };
     
-    fetchDERs();
+    fetchData();
+    // Refresh every 30 seconds
+    const interval = setInterval(fetchData, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   // TODO: remove mock data
