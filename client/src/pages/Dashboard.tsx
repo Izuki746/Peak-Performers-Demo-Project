@@ -1,33 +1,15 @@
 import { useState } from "react";
-import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { useToast } from "@/hooks/use-toast";
 import StatusCard from "@/components/StatusCard";
-import FeederCard from "@/components/FeederCard";
 import DERCard from "@/components/DERCard";
 import AlertBanner from "@/components/AlertBanner";
-import ChatbotPanel from "@/components/ChatbotPanel";
-import FeederDetailModal from "@/components/FeederDetailModal";
-import ThemeToggle from "@/components/ThemeToggle";
-import { Zap, Activity, Battery, Clock, Search, MessageSquare, Menu, FileText } from "lucide-react";
+import { Zap, Activity, Battery, Clock } from "lucide-react";
 
 export default function Dashboard() {
-  const [searchQuery, setSearchQuery] = useState("");
-  const [selectedFeeder, setSelectedFeeder] = useState<any>(null);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [chatOpen, setChatOpen] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(false); // Hidden by default
   const [activatingDER, setActivatingDER] = useState<string | null>(null);
   const { toast } = useToast();
-  
-  // Feature flags
-  const SHOW_FEEDERS = false; // TODO: Set to true when ready to show feeders
-  const SHOW_CHATBOT = false; // TODO: Set to true when ready to show chatbot
 
   // TODO: remove mock data
   const mockAlerts = [
@@ -44,49 +26,6 @@ export default function Dashboard() {
       message: "Predicted load spike in Camden area within next 15 minutes.",
       feederId: "F-5678",
       timestamp: new Date(Date.now() - 120000)
-    }
-  ];
-
-  const mockFeeders = [
-    {
-      id: "F-1234",
-      name: "Feeder F-1234",
-      substationName: "Westminster Substation",
-      currentLoad: 87.5,
-      capacity: 95,
-      status: "critical" as const,
-      criticality: "critical" as const,
-      connectedDERs: 12
-    },
-    {
-      id: "F-5678",
-      name: "Feeder F-5678",
-      substationName: "Camden Substation",
-      currentLoad: 68.2,
-      capacity: 90,
-      status: "warning" as const,
-      criticality: "high" as const,
-      connectedDERs: 8
-    },
-    {
-      id: "F-9012",
-      name: "Feeder F-9012",
-      substationName: "Hackney Substation",
-      currentLoad: 42.1,
-      capacity: 85,
-      status: "normal" as const,
-      criticality: "medium" as const,
-      connectedDERs: 15
-    },
-    {
-      id: "F-3456",
-      name: "Feeder F-3456",
-      substationName: "Islington Substation",
-      currentLoad: 35.8,
-      capacity: 80,
-      status: "normal" as const,
-      criticality: "low" as const,
-      connectedDERs: 6
     }
   ];
 
@@ -153,30 +92,6 @@ export default function Dashboard() {
     }
   ];
 
-  const handleViewFeederDetails = (feeder: any) => {
-    setSelectedFeeder(feeder);
-    setModalOpen(true);
-    toast({
-      title: "Opening Feeder Details",
-      description: `Loading data for ${feeder.name}`,
-    });
-  };
-
-  const handleActivateDERsForFeeder = (feederId: string) => {
-    toast({
-      title: "Initiating Beckn Protocol",
-      description: `Starting DER activation workflow for ${feederId}`,
-    });
-    
-    setTimeout(() => {
-      toast({
-        title: "DER Activation Successful",
-        description: `8 DERs activated for ${feederId}. Load reduced by 12.5 MW.`,
-        variant: "default",
-      });
-    }, 2000);
-  };
-
   const handleActivateDER = (derId: string) => {
     setActivatingDER(derId);
     
@@ -206,105 +121,7 @@ export default function Dashboard() {
   const availableDERs = mockDERs.filter(d => d.available).length;
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Top Navigation */}
-      <header className="sticky top-0 z-50 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="flex h-16 items-center justify-between px-6">
-          <div className="flex items-center gap-4">
-            {SHOW_FEEDERS && (
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setSidebarOpen(!sidebarOpen)}
-                data-testid="button-toggle-sidebar"
-                className="lg:hidden"
-              >
-                <Menu className="h-5 w-5" />
-              </Button>
-            )}
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-md bg-primary">
-                <Zap className="h-6 w-6 text-primary-foreground" />
-              </div>
-              <div>
-                <h1 className="text-xl font-bold">Grid Command Center</h1>
-                <p className="text-xs text-muted-foreground hidden sm:block">Beckn Protocol DER Orchestration</p>
-              </div>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <Badge variant="outline" className="gap-2 hidden sm:flex">
-              <div className="h-2 w-2 rounded-full bg-accent-foreground animate-pulse" />
-              Live
-            </Badge>
-            {SHOW_CHATBOT && (
-              <Sheet open={chatOpen} onOpenChange={setChatOpen}>
-                <SheetTrigger asChild>
-                  <Button variant="outline" size="icon" data-testid="button-open-chat">
-                    <MessageSquare className="h-5 w-5" />
-                  </Button>
-                </SheetTrigger>
-                <SheetContent side="right" className="w-full sm:w-[500px] p-0">
-                  <SheetHeader className="p-6 pb-0">
-                    <SheetTitle>AI Grid Assistant</SheetTitle>
-                  </SheetHeader>
-                  <div className="h-[calc(100vh-5rem)] p-6 pt-4">
-                    <ChatbotPanel
-                      onSendMessage={(msg) => {
-                        toast({
-                          title: "Processing Request",
-                          description: "AI is analyzing your request...",
-                        });
-                      }}
-                    />
-                  </div>
-                </SheetContent>
-              </Sheet>
-            )}
-            <ThemeToggle />
-          </div>
-        </div>
-      </header>
-
-      {/* Main Layout */}
-      <div className="flex">
-        {/* Collapsible Sidebar */}
-        {SHOW_FEEDERS && sidebarOpen && (
-          <aside className="w-80 border-r border-border bg-card hidden lg:block">
-            <div className="p-6 border-b border-border">
-              <h2 className="font-semibold mb-4 text-lg">Feeders</h2>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search feeders..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-9"
-                  data-testid="input-search-feeders"
-                />
-              </div>
-            </div>
-            <ScrollArea className="h-[calc(100vh-14rem)]">
-              <div className="p-6 space-y-4">
-                {mockFeeders
-                  .filter(f => f.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                               f.substationName.toLowerCase().includes(searchQuery.toLowerCase()))
-                  .map((feeder) => (
-                    <FeederCard
-                      key={feeder.id}
-                      {...feeder}
-                      onViewDetails={() => handleViewFeederDetails(feeder)}
-                      onActivateDERs={() => handleActivateDERsForFeeder(feeder.id)}
-                    />
-                  ))}
-              </div>
-            </ScrollArea>
-          </aside>
-        )}
-
-        {/* Main Content */}
-        <main className="flex-1 overflow-y-auto">
-          <div className="p-6 lg:p-8 space-y-8 max-w-[1600px] mx-auto">
+    <div className="p-6 lg:p-8 space-y-8 max-w-[1600px] mx-auto">
             {/* KPI Metrics */}
             <section>
               <h2 className="text-lg font-semibold mb-6">Grid Status</h2>
@@ -354,10 +171,10 @@ export default function Dashboard() {
                       {...alert}
                       onDismiss={() => handleDismissAlert(alert.id)}
                       onTakeAction={() => {
-                        if (alert.feederId) {
-                          const feeder = mockFeeders.find(f => f.id === alert.feederId);
-                          if (feeder) handleViewFeederDetails(feeder);
-                        }
+                        toast({
+                          title: "Viewing Alert Details",
+                          description: `Opening details for ${alert.feederId}`,
+                        });
                       }}
                     />
                   ))}
@@ -445,58 +262,5 @@ export default function Dashboard() {
               </Tabs>
             </section>
           </div>
-        </main>
-      </div>
-
-      {/* Mobile Feeders Sheet */}
-      {SHOW_FEEDERS && (
-        <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
-          <SheetContent side="left" className="w-80 p-0 lg:hidden">
-            <SheetHeader className="p-6 pb-0">
-              <SheetTitle>Feeders</SheetTitle>
-            </SheetHeader>
-            <div className="p-6 pt-4">
-              <div className="relative mb-4">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search feeders..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-9"
-                />
-              </div>
-              <ScrollArea className="h-[calc(100vh-12rem)]">
-                <div className="space-y-4">
-                  {mockFeeders
-                    .filter(f => f.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                                 f.substationName.toLowerCase().includes(searchQuery.toLowerCase()))
-                    .map((feeder) => (
-                      <FeederCard
-                        key={feeder.id}
-                        {...feeder}
-                        onViewDetails={() => {
-                          handleViewFeederDetails(feeder);
-                          setSidebarOpen(false);
-                        }}
-                        onActivateDERs={() => {
-                          handleActivateDERsForFeeder(feeder.id);
-                          setSidebarOpen(false);
-                        }}
-                      />
-                    ))}
-                </div>
-              </ScrollArea>
-            </div>
-          </SheetContent>
-        </Sheet>
-      )}
-
-      {/* Feeder Detail Modal */}
-      <FeederDetailModal
-        open={modalOpen}
-        onOpenChange={setModalOpen}
-        feeder={selectedFeeder}
-      />
-    </div>
   );
 }
