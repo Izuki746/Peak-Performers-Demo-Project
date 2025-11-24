@@ -2,7 +2,7 @@ import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import ThemeToggle from "./ThemeToggle";
-import { Zap, LayoutDashboard, Antenna, MessageSquare } from "lucide-react";
+import { Zap, LayoutDashboard, Antenna, MessageSquare, FileText } from "lucide-react";
 
 export default function Navigation() {
   const [location] = useLocation();
@@ -10,7 +10,8 @@ export default function Navigation() {
   const navItems = [
     { path: "/", label: "Dashboard", icon: LayoutDashboard },
     { path: "/feeders", label: "Feeders", icon: Antenna },
-    { path: "/ai-assistant", label: "AI Assistant", icon: MessageSquare }
+    { path: "/ai-assistant", label: "AI Assistant", icon: MessageSquare },
+    { path: "/audit-logs", label: "Audit Logs", icon: FileText }
   ];
 
   return (

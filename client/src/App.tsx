@@ -7,6 +7,7 @@ import Navigation from "@/components/Navigation";
 import Dashboard from "@/pages/Dashboard";
 import Feeders from "@/pages/Feeders";
 import AIAssistant from "@/pages/AIAssistant";
+import AuditLogs from "@/pages/AuditLogs";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -15,6 +16,7 @@ function Router() {
       <Route path="/" component={Dashboard} />
       <Route path="/feeders" component={Feeders} />
       <Route path="/ai-assistant" component={AIAssistant} />
+      <Route path="/audit-logs" component={AuditLogs} />
       <Route component={NotFound} />
     </Switch>
   );
