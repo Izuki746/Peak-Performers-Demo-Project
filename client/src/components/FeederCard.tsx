@@ -13,6 +13,8 @@ interface FeederCardProps {
   criticality: "critical" | "high" | "medium" | "low";
   connectedDERs: number;
   activeDERs?: any[];
+  responseTime?: number; // ms since last DER activation
+  isResponding?: boolean; // true if DERs are currently responding
   onViewDetails?: () => void;
   onActivateDERs?: () => void;
 }
@@ -27,10 +29,19 @@ export default function FeederCard({
   criticality,
   connectedDERs,
   activeDERs = [],
+  responseTime,
+  isResponding,
   onViewDetails,
   onActivateDERs
 }: FeederCardProps) {
   const loadPercentage = (currentLoad / capacity) * 100;
+  
+  // Format response time in seconds
+  const formatResponseTime = (ms: number | undefined) => {
+    if (!ms) return null;
+    const seconds = Math.round(ms / 1000);
+    return `${seconds}s`;
+  };
   
   const statusConfig = {
     normal: { icon: CheckCircle, color: "text-accent-foreground", bg: "bg-accent" },
@@ -94,11 +105,21 @@ export default function FeederCard({
         </div>
 
         {activeDERs && activeDERs.length > 0 && (
-          <div className="flex items-center gap-2 p-2 bg-accent/20 rounded-md">
-            <Zap className="h-3 w-3 text-accent-foreground" />
-            <span className="text-xs font-medium text-accent-foreground">
-              {activeDERs.length} DER{activeDERs.length !== 1 ? 's' : ''} Active
-            </span>
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 p-2 bg-accent/20 rounded-md">
+              <Zap className="h-3 w-3 text-accent-foreground" />
+              <span className="text-xs font-medium text-accent-foreground">
+                {activeDERs.length} DER{activeDERs.length !== 1 ? 's' : ''} Active
+              </span>
+            </div>
+            {isResponding && responseTime !== undefined && (
+              <div className="flex items-center justify-between text-xs px-2 py-1 bg-green-50 dark:bg-green-950/30 rounded border border-green-200 dark:border-green-800">
+                <span className="text-green-700 dark:text-green-400">Response Time:</span>
+                <span className="font-mono font-bold text-green-700 dark:text-green-400">
+                  {formatResponseTime(responseTime)}
+                </span>
+              </div>
+            )}
           </div>
         )}
 

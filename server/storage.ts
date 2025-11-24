@@ -22,6 +22,8 @@ interface FeederWithCalculatedLoad {
   connectedDERs: number;
   activeDERContribution: number; // total kW from active DERs
   activeDERs?: ActiveDER[]; // List of DERs actively helping this feeder
+  responseTime?: number; // ms since last DER activation
+  isResponding?: boolean; // true if DERs are currently responding
 }
 
 interface AuditLog {
@@ -51,6 +53,8 @@ export class MemStorage implements IStorage {
   private users: Map<string, User>;
   private activeDERs: Map<string, ActiveDER>; // key: orderId
   private auditLogs: AuditLog[] = [];
+  private feederBaseLoads: Map<string, { baseLoad: number; targetLoad: number; variance: number }>;
+  private feederActivationTimes: Map<string, number>; // track when DERs were last activated
   private mockFeeders: FeederWithCalculatedLoad[] = [
     {
       id: "F-1234",
@@ -129,6 +133,40 @@ export class MemStorage implements IStorage {
   constructor() {
     this.users = new Map();
     this.activeDERs = new Map();
+    this.feederActivationTimes = new Map();
+    
+    // Initialize dynamic load tracking for each feeder
+    this.feederBaseLoads = new Map();
+    this.mockFeeders.forEach(feeder => {
+      this.feederBaseLoads.set(feeder.id, {
+        baseLoad: feeder.baseLoad,
+        targetLoad: feeder.baseLoad,
+        variance: 0
+      });
+    });
+    
+    // Start dynamic load simulation
+    this.startDynamicLoadSimulation();
+  }
+
+  private startDynamicLoadSimulation() {
+    // Update loads every 3 seconds to simulate grid fluctuations
+    setInterval(() => {
+      this.feederBaseLoads.forEach((loadData, feederId) => {
+        // Random walk to simulate demand variations (±15% variance)
+        const maxVariance = loadData.baseLoad * 0.15;
+        const change = (Math.random() - 0.5) * maxVariance * 0.3;
+        loadData.variance += change;
+        
+        // Keep variance within bounds
+        if (Math.abs(loadData.variance) > maxVariance) {
+          loadData.variance = Math.sign(loadData.variance) * maxVariance;
+        }
+        
+        loadData.targetLoad = loadData.baseLoad + loadData.variance;
+        loadData.targetLoad = Math.max(0, Math.min(loadData.targetLoad, 100));
+      });
+    }, 3000);
   }
 
   async getUser(id: string): Promise<User | undefined> {
@@ -158,6 +196,9 @@ export class MemStorage implements IStorage {
     };
 
     this.activeDERs.set(orderId, activeDER);
+    
+    // Track activation time for response time calculation
+    this.feederActivationTimes.set(feederId, Date.now());
 
     // Update feeder's active DER contribution
     const feeder = this.mockFeeders.find(f => f.id === feederId);
@@ -213,10 +254,26 @@ export class MemStorage implements IStorage {
   async getFeedersWithLoad(): Promise<FeederWithCalculatedLoad[]> {
     return this.mockFeeders.map(feeder => {
       const activeDERs = Array.from(this.activeDERs.values()).filter(d => d.feederId === feeder.id);
+      
+      // Get dynamic load for this feeder
+      const loadData = this.feederBaseLoads.get(feeder.id);
+      const dynamicBaseLoad = loadData?.targetLoad || feeder.baseLoad;
+      
+      // Calculate current load accounting for active DER contributions
+      const calculatedLoad = Math.max(0, dynamicBaseLoad - feeder.activeDERContribution);
+      
+      // Calculate response time since last DER activation
+      const activationTime = this.feederActivationTimes.get(feeder.id);
+      const responseTime = activationTime ? Date.now() - activationTime : undefined;
+      const isResponding = activeDERs.length > 0;
+      
       return {
         ...feeder,
-        currentLoad: Math.max(0, feeder.baseLoad - feeder.activeDERContribution),
-        activeDERs: activeDERs
+        baseLoad: dynamicBaseLoad,
+        currentLoad: calculatedLoad,
+        activeDERs: activeDERs,
+        responseTime: responseTime,
+        isResponding: isResponding
       };
     });
   }
