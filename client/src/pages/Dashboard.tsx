@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
@@ -9,7 +9,35 @@ import { Zap, Activity, Battery, Clock } from "lucide-react";
 
 export default function Dashboard() {
   const [activatingDER, setActivatingDER] = useState<string | null>(null);
+  const [mockDERs, setMockDERs] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const { toast } = useToast();
+
+  // Fetch DERs from BECKN API on component mount
+  useEffect(() => {
+    const fetchDERs = async () => {
+      try {
+        const response = await fetch("/api/der/search", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            fulfillmentType: "energy-dispatch",
+            quantity: { amount: "100", unit: "kWh" }
+          })
+        });
+        const result = await response.json();
+        if (result.success) {
+          setMockDERs(result.data);
+        }
+      } catch (error) {
+        console.error("Failed to fetch DERs:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchDERs();
+  }, []);
 
   // TODO: remove mock data
   const mockAlerts = [
@@ -29,85 +57,48 @@ export default function Dashboard() {
     }
   ];
 
-  const mockDERs = [
-    {
-      id: "DER-001",
-      type: "battery" as const,
-      name: "Tesla Powerwall #42",
-      capacity: 13.5,
-      currentOutput: 8.2,
-      status: "active" as const,
-      owner: "Smith Residence",
-      available: true
-    },
-    {
-      id: "DER-002",
-      type: "ev" as const,
-      name: "EV Charger Station B",
-      capacity: 150,
-      currentOutput: 0,
-      status: "idle" as const,
-      owner: "Public Charging Network",
-      available: true
-    },
-    {
-      id: "DER-003",
-      type: "solar" as const,
-      name: "Rooftop Solar Array",
-      capacity: 25,
-      currentOutput: 18.5,
-      status: "active" as const,
-      owner: "Johnson Commercial",
-      available: true
-    },
-    {
-      id: "DER-004",
-      type: "demand_response" as const,
-      name: "HVAC Load Control",
-      capacity: 50,
-      currentOutput: 0,
-      status: "idle" as const,
-      owner: "Office Building A",
-      available: true
-    },
-    {
-      id: "DER-005",
-      type: "battery" as const,
-      name: "Community Battery Bank",
-      capacity: 200,
-      currentOutput: 120,
-      status: "active" as const,
-      owner: "Energy Co-op",
-      available: true
-    },
-    {
-      id: "DER-006",
-      type: "demand_response" as const,
-      name: "Industrial Load Shift",
-      capacity: 300,
-      currentOutput: 0,
-      status: "idle" as const,
-      owner: "Factory Complex",
-      available: true
-    }
-  ];
 
-  const handleActivateDER = (derId: string) => {
+  const handleActivateDER = async (derId: string) => {
     setActivatingDER(derId);
     
     toast({
       title: "Activating DER",
-      description: `Initiating Beckn Protocol for ${derId}`,
+      description: `Initiating Beckn Protocol for ${derId}...`,
     });
 
-    setTimeout(() => {
+    try {
+      const response = await fetch(`/api/der/${derId}/activate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          quantity: { amount: "50", unit: "kWh" },
+          startTime: new Date().toISOString(),
+          endTime: new Date(Date.now() + 3600000).toISOString()
+        })
+      });
+
+      const result = await response.json();
+      
+      setTimeout(() => {
+        setActivatingDER(null);
+        if (result.success) {
+          toast({
+            title: "DER Activated",
+            description: `${derId} activated successfully via BECKN Protocol. Order: ${result.data.orderId}`,
+            variant: "default",
+          });
+        } else {
+          throw new Error("Activation failed");
+        }
+      }, 1500);
+    } catch (error) {
       setActivatingDER(null);
       toast({
-        title: "DER Activated",
-        description: `${derId} is now active and providing grid services.`,
-        variant: "default",
+        title: "Activation Failed",
+        description: "Failed to activate DER via BECKN Protocol",
+        variant: "destructive",
       });
-    }, 1500);
+    }
   };
 
   const handleDismissAlert = (alertId: string) => {
