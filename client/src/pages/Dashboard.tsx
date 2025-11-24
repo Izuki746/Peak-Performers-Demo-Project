@@ -21,9 +21,13 @@ export default function Dashboard() {
   const [selectedFeeder, setSelectedFeeder] = useState<any>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false); // Hidden by default
   const [activatingDER, setActivatingDER] = useState<string | null>(null);
   const { toast } = useToast();
+  
+  // Feature flags
+  const SHOW_FEEDERS = false; // TODO: Set to true when ready to show feeders
+  const SHOW_CHATBOT = false; // TODO: Set to true when ready to show chatbot
 
   // TODO: remove mock data
   const mockAlerts = [
@@ -207,15 +211,17 @@ export default function Dashboard() {
       <header className="sticky top-0 z-50 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="flex h-16 items-center justify-between px-6">
           <div className="flex items-center gap-4">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              data-testid="button-toggle-sidebar"
-              className="lg:hidden"
-            >
-              <Menu className="h-5 w-5" />
-            </Button>
+            {SHOW_FEEDERS && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setSidebarOpen(!sidebarOpen)}
+                data-testid="button-toggle-sidebar"
+                className="lg:hidden"
+              >
+                <Menu className="h-5 w-5" />
+              </Button>
+            )}
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-md bg-primary">
                 <Zap className="h-6 w-6 text-primary-foreground" />
@@ -231,28 +237,30 @@ export default function Dashboard() {
               <div className="h-2 w-2 rounded-full bg-accent-foreground animate-pulse" />
               Live
             </Badge>
-            <Sheet open={chatOpen} onOpenChange={setChatOpen}>
-              <SheetTrigger asChild>
-                <Button variant="outline" size="icon" data-testid="button-open-chat">
-                  <MessageSquare className="h-5 w-5" />
-                </Button>
-              </SheetTrigger>
-              <SheetContent side="right" className="w-full sm:w-[500px] p-0">
-                <SheetHeader className="p-6 pb-0">
-                  <SheetTitle>AI Grid Assistant</SheetTitle>
-                </SheetHeader>
-                <div className="h-[calc(100vh-5rem)] p-6 pt-4">
-                  <ChatbotPanel
-                    onSendMessage={(msg) => {
-                      toast({
-                        title: "Processing Request",
-                        description: "AI is analyzing your request...",
-                      });
-                    }}
-                  />
-                </div>
-              </SheetContent>
-            </Sheet>
+            {SHOW_CHATBOT && (
+              <Sheet open={chatOpen} onOpenChange={setChatOpen}>
+                <SheetTrigger asChild>
+                  <Button variant="outline" size="icon" data-testid="button-open-chat">
+                    <MessageSquare className="h-5 w-5" />
+                  </Button>
+                </SheetTrigger>
+                <SheetContent side="right" className="w-full sm:w-[500px] p-0">
+                  <SheetHeader className="p-6 pb-0">
+                    <SheetTitle>AI Grid Assistant</SheetTitle>
+                  </SheetHeader>
+                  <div className="h-[calc(100vh-5rem)] p-6 pt-4">
+                    <ChatbotPanel
+                      onSendMessage={(msg) => {
+                        toast({
+                          title: "Processing Request",
+                          description: "AI is analyzing your request...",
+                        });
+                      }}
+                    />
+                  </div>
+                </SheetContent>
+              </Sheet>
+            )}
             <ThemeToggle />
           </div>
         </div>
@@ -261,7 +269,7 @@ export default function Dashboard() {
       {/* Main Layout */}
       <div className="flex">
         {/* Collapsible Sidebar */}
-        {sidebarOpen && (
+        {SHOW_FEEDERS && sidebarOpen && (
           <aside className="w-80 border-r border-border bg-card hidden lg:block">
             <div className="p-6 border-b border-border">
               <h2 className="font-semibold mb-4 text-lg">Feeders</h2>
@@ -441,45 +449,47 @@ export default function Dashboard() {
       </div>
 
       {/* Mobile Feeders Sheet */}
-      <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
-        <SheetContent side="left" className="w-80 p-0 lg:hidden">
-          <SheetHeader className="p-6 pb-0">
-            <SheetTitle>Feeders</SheetTitle>
-          </SheetHeader>
-          <div className="p-6 pt-4">
-            <div className="relative mb-4">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search feeders..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9"
-              />
-            </div>
-            <ScrollArea className="h-[calc(100vh-12rem)]">
-              <div className="space-y-4">
-                {mockFeeders
-                  .filter(f => f.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                               f.substationName.toLowerCase().includes(searchQuery.toLowerCase()))
-                  .map((feeder) => (
-                    <FeederCard
-                      key={feeder.id}
-                      {...feeder}
-                      onViewDetails={() => {
-                        handleViewFeederDetails(feeder);
-                        setSidebarOpen(false);
-                      }}
-                      onActivateDERs={() => {
-                        handleActivateDERsForFeeder(feeder.id);
-                        setSidebarOpen(false);
-                      }}
-                    />
-                  ))}
+      {SHOW_FEEDERS && (
+        <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
+          <SheetContent side="left" className="w-80 p-0 lg:hidden">
+            <SheetHeader className="p-6 pb-0">
+              <SheetTitle>Feeders</SheetTitle>
+            </SheetHeader>
+            <div className="p-6 pt-4">
+              <div className="relative mb-4">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search feeders..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-9"
+                />
               </div>
-            </ScrollArea>
-          </div>
-        </SheetContent>
-      </Sheet>
+              <ScrollArea className="h-[calc(100vh-12rem)]">
+                <div className="space-y-4">
+                  {mockFeeders
+                    .filter(f => f.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                                 f.substationName.toLowerCase().includes(searchQuery.toLowerCase()))
+                    .map((feeder) => (
+                      <FeederCard
+                        key={feeder.id}
+                        {...feeder}
+                        onViewDetails={() => {
+                          handleViewFeederDetails(feeder);
+                          setSidebarOpen(false);
+                        }}
+                        onActivateDERs={() => {
+                          handleActivateDERsForFeeder(feeder.id);
+                          setSidebarOpen(false);
+                        }}
+                      />
+                    ))}
+                </div>
+              </ScrollArea>
+            </div>
+          </SheetContent>
+        </Sheet>
+      )}
 
       {/* Feeder Detail Modal */}
       <FeederDetailModal
