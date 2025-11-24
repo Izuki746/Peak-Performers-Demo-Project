@@ -54,6 +54,9 @@ async function callSandboxAPI(action: string, payload: SandboxRequest): Promise<
   console.log(`[BAP Sandbox] Transaction ID: ${payload.context.transaction_id}`);
   console.log(`[BAP Sandbox] Message ID: ${payload.context.message_id}`);
   console.log(`[BAP Sandbox] Domain: ${payload.context.domain}`);
+  console.log(`[BAP Sandbox] 🔗 Endpoint: POST ${BAP_SANDBOX_URL}/api/sandbox/${action}`);
+  console.log(`[BAP Sandbox] 📋 REQUEST PAYLOAD:`);
+  console.log(JSON.stringify(payload, null, 2));
 
   switch (action) {
     case "search":
@@ -74,25 +77,23 @@ async function callSandboxAPI(action: string, payload: SandboxRequest): Promise<
           category_id: "DEMAND-RESPONSE",
         },
       ];
+      const searchResponse = {
+        success: true,
+        providers,
+      };
       console.log(`[BAP Sandbox] 📥 RESPONSE: SEARCH`);
       console.log(`[BAP Sandbox] ✅ Success: true`);
       console.log(`[BAP Sandbox] 🏢 Providers found: ${providers.length}`);
       providers.forEach((p, i) => {
         console.log(`[BAP Sandbox]    ${i + 1}. ${p.descriptor.name} (${p.id})`);
       });
-      return {
-        success: true,
-        providers,
-      };
+      console.log(`[BAP Sandbox] 📋 RESPONSE PAYLOAD:`);
+      console.log(JSON.stringify(searchResponse, null, 2));
+      return searchResponse;
 
     case "select":
       const selectionId = `SEL-${nanoid()}`;
-      console.log(`[BAP Sandbox] 📥 RESPONSE: SELECT`);
-      console.log(`[BAP Sandbox] ✅ Success: true`);
-      console.log(`[BAP Sandbox] 📋 Selection ID: ${selectionId}`);
-      console.log(`[BAP Sandbox] 💰 Quote: GBP 250.00`);
-      console.log(`[BAP Sandbox] ⏱️  Valid for: 30 minutes`);
-      return {
+      const selectResponse = {
         success: true,
         data: {
           id: selectionId,
@@ -103,59 +104,79 @@ async function callSandboxAPI(action: string, payload: SandboxRequest): Promise<
           },
         },
       };
+      console.log(`[BAP Sandbox] 📥 RESPONSE: SELECT`);
+      console.log(`[BAP Sandbox] ✅ Success: true`);
+      console.log(`[BAP Sandbox] 📋 Selection ID: ${selectionId}`);
+      console.log(`[BAP Sandbox] 💰 Quote: GBP 250.00`);
+      console.log(`[BAP Sandbox] ⏱️  Valid for: 30 minutes`);
+      console.log(`[BAP Sandbox] 📋 RESPONSE PAYLOAD:`);
+      console.log(JSON.stringify(selectResponse, null, 2));
+      return selectResponse;
 
     case "init":
       const initOrderId = `ORD-${nanoid()}`;
-      console.log(`[BAP Sandbox] 📥 RESPONSE: INIT`);
-      console.log(`[BAP Sandbox] ✅ Success: true`);
-      console.log(`[BAP Sandbox] 📋 Order ID: ${initOrderId}`);
-      console.log(`[BAP Sandbox] 🔄 State: DRAFT (prepared, not yet active)`);
-      return {
+      const initResponse = {
         success: true,
         data: {
           id: initOrderId,
           state: "DRAFT",
         },
       };
+      console.log(`[BAP Sandbox] 📥 RESPONSE: INIT`);
+      console.log(`[BAP Sandbox] ✅ Success: true`);
+      console.log(`[BAP Sandbox] 📋 Order ID: ${initOrderId}`);
+      console.log(`[BAP Sandbox] 🔄 State: DRAFT (prepared, not yet active)`);
+      console.log(`[BAP Sandbox] 📋 RESPONSE PAYLOAD:`);
+      console.log(JSON.stringify(initResponse, null, 2));
+      return initResponse;
 
     case "confirm":
       const confirmOrderId = payload.message.id || `ORD-${nanoid()}`;
+      const confirmResponse = {
+        success: true,
+        orderId: confirmOrderId,
+        state: "ACTIVE",
+      };
       console.log(`[BAP Sandbox] 📥 RESPONSE: CONFIRM`);
       console.log(`[BAP Sandbox] ✅ Success: true`);
       console.log(`[BAP Sandbox] 📋 Order ID: ${confirmOrderId}`);
       console.log(`[BAP Sandbox] 🔄 State: ACTIVE`);
       console.log(`[BAP Sandbox] ✨ DER IS NOW ACTIVELY REDUCING LOAD`);
-      return {
-        success: true,
-        orderId: confirmOrderId,
-        state: "ACTIVE",
-      };
+      console.log(`[BAP Sandbox] 📋 RESPONSE PAYLOAD:`);
+      console.log(JSON.stringify(confirmResponse, null, 2));
+      return confirmResponse;
 
     case "status":
       const statusOrderId = payload.message.order_id;
+      const statusResponse = {
+        success: true,
+        state: "ACTIVE",
+        orderId: statusOrderId,
+      };
       console.log(`[BAP Sandbox] 📥 RESPONSE: STATUS`);
       console.log(`[BAP Sandbox] ✅ Success: true`);
       console.log(`[BAP Sandbox] 📋 Order ID: ${statusOrderId}`);
       console.log(`[BAP Sandbox] 🔄 State: ACTIVE`);
       console.log(`[BAP Sandbox] ✅ DER is running and providing load reduction`);
-      return {
-        success: true,
-        state: "ACTIVE",
-        orderId: statusOrderId,
-      };
+      console.log(`[BAP Sandbox] 📋 RESPONSE PAYLOAD:`);
+      console.log(JSON.stringify(statusResponse, null, 2));
+      return statusResponse;
 
     case "cancel":
       const cancelOrderId = payload.message.order_id;
+      const cancelResponse = {
+        success: true,
+        state: "CANCELLED",
+        orderId: cancelOrderId,
+      };
       console.log(`[BAP Sandbox] 📥 RESPONSE: CANCEL`);
       console.log(`[BAP Sandbox] ✅ Success: true`);
       console.log(`[BAP Sandbox] 📋 Order ID: ${cancelOrderId}`);
       console.log(`[BAP Sandbox] 🔄 State: CANCELLED`);
       console.log(`[BAP Sandbox] ⏹️  DER deactivated`);
-      return {
-        success: true,
-        state: "CANCELLED",
-        orderId: cancelOrderId,
-      };
+      console.log(`[BAP Sandbox] 📋 RESPONSE PAYLOAD:`);
+      console.log(JSON.stringify(cancelResponse, null, 2));
+      return cancelResponse;
 
     default:
       return { success: false, error: "Unknown action" };
