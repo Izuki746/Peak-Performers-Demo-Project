@@ -302,4 +302,140 @@ router.get("/api/agent/analyze", async (req, res) => {
   }
 });
 
+// ============================================
+// BAP CALLBACK ENDPOINTS (from Sandbox/BPPs)
+// ============================================
+// These endpoints receive callbacks from the BAP Sandbox when responding to Beckn requests
+
+router.post("/beckn/on_search", async (req, res) => {
+  try {
+    const { context, message } = req.body;
+    console.log("\n" + "=".repeat(70));
+    console.log("📨 BAP CALLBACK RECEIVED: on_search");
+    console.log("=".repeat(70));
+    console.log(`Transaction ID: ${context?.transaction_id}`);
+    console.log(`Message ID: ${context?.message_id}`);
+    console.log(`Timestamp: ${context?.timestamp}`);
+    console.log(`Providers: ${message?.catalog?.providers?.length || 0}`);
+    if (message?.catalog?.providers) {
+      message.catalog.providers.slice(0, 3).forEach((p: any, i: number) => {
+        console.log(`  ${i + 1}. ${p.descriptor?.name} (${p.id})`);
+      });
+    }
+    console.log("=".repeat(70) + "\n");
+    res.json({ ack: { status: "ACK" } });
+  } catch (error) {
+    console.error("[BAP] on_search callback error:", error);
+    res.status(400).json({ ack: { status: "NACK" } });
+  }
+});
+
+router.post("/beckn/on_select", async (req, res) => {
+  try {
+    const { context, message } = req.body;
+    console.log("\n" + "=".repeat(70));
+    console.log("📨 BAP CALLBACK RECEIVED: on_select");
+    console.log("=".repeat(70));
+    console.log(`Transaction ID: ${context?.transaction_id}`);
+    console.log(`Order ID: ${message?.order?.id}`);
+    console.log(`Quote: ${message?.order?.quote?.price?.value} ${message?.order?.quote?.price?.currency}`);
+    console.log("=".repeat(70) + "\n");
+    res.json({ ack: { status: "ACK" } });
+  } catch (error) {
+    console.error("[BAP] on_select callback error:", error);
+    res.status(400).json({ ack: { status: "NACK" } });
+  }
+});
+
+router.post("/beckn/on_init", async (req, res) => {
+  try {
+    const { context, message } = req.body;
+    console.log("\n" + "=".repeat(70));
+    console.log("📨 BAP CALLBACK RECEIVED: on_init");
+    console.log("=".repeat(70));
+    console.log(`Transaction ID: ${context?.transaction_id}`);
+    console.log(`Order ID: ${message?.order?.id}`);
+    console.log(`State: ${message?.order?.state}`);
+    console.log("=".repeat(70) + "\n");
+    res.json({ ack: { status: "ACK" } });
+  } catch (error) {
+    console.error("[BAP] on_init callback error:", error);
+    res.status(400).json({ ack: { status: "NACK" } });
+  }
+});
+
+router.post("/beckn/on_confirm", async (req, res) => {
+  try {
+    const { context, message } = req.body;
+    console.log("\n" + "=".repeat(70));
+    console.log("📨 BAP CALLBACK RECEIVED: on_confirm");
+    console.log("=".repeat(70));
+    console.log(`Transaction ID: ${context?.transaction_id}`);
+    console.log(`Order ID: ${message?.order?.id}`);
+    console.log(`State: ${message?.order?.state}`);
+    console.log(`Provider: ${message?.order?.provider?.descriptor?.name}`);
+    console.log("✨ DER IS NOW ACTIVE AND PROVIDING LOAD REDUCTION");
+    console.log("=".repeat(70) + "\n");
+    res.json({ ack: { status: "ACK" } });
+  } catch (error) {
+    console.error("[BAP] on_confirm callback error:", error);
+    res.status(400).json({ ack: { status: "NACK" } });
+  }
+});
+
+router.post("/beckn/on_status", async (req, res) => {
+  try {
+    const { context, message } = req.body;
+    console.log("\n" + "=".repeat(70));
+    console.log("📨 BAP CALLBACK RECEIVED: on_status");
+    console.log("=".repeat(70));
+    console.log(`Transaction ID: ${context?.transaction_id}`);
+    console.log(`Order ID: ${message?.order?.id}`);
+    console.log(`State: ${message?.order?.state}`);
+    console.log(`Current Output: ${message?.order?.fulfillments?.[0]?.state?.descriptor?.gps || "N/A"}`);
+    console.log("=".repeat(70) + "\n");
+    res.json({ ack: { status: "ACK" } });
+  } catch (error) {
+    console.error("[BAP] on_status callback error:", error);
+    res.status(400).json({ ack: { status: "NACK" } });
+  }
+});
+
+router.post("/beckn/on_cancel", async (req, res) => {
+  try {
+    const { context, message } = req.body;
+    console.log("\n" + "=".repeat(70));
+    console.log("📨 BAP CALLBACK RECEIVED: on_cancel");
+    console.log("=".repeat(70));
+    console.log(`Transaction ID: ${context?.transaction_id}`);
+    console.log(`Order ID: ${message?.order?.id}`);
+    console.log(`State: ${message?.order?.state}`);
+    console.log("=".repeat(70) + "\n");
+    res.json({ ack: { status: "ACK" } });
+  } catch (error) {
+    console.error("[BAP] on_cancel callback error:", error);
+    res.status(400).json({ ack: { status: "NACK" } });
+  }
+});
+
+// ============================================
+// BAP HEALTH & DIAGNOSTIC ENDPOINTS
+// ============================================
+
+router.get("/beckn/health", async (req, res) => {
+  res.json({
+    status: "healthy",
+    bap_id: process.env.BAP_ID || "grid-command-center",
+    bap_uri: process.env.BAP_URI || "http://localhost:5000",
+    endpoints: {
+      on_search: "POST /beckn/on_search",
+      on_select: "POST /beckn/on_select",
+      on_init: "POST /beckn/on_init",
+      on_confirm: "POST /beckn/on_confirm",
+      on_status: "POST /beckn/on_status",
+      on_cancel: "POST /beckn/on_cancel"
+    }
+  });
+});
+
 export default router;
