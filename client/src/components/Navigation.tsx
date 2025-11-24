@@ -18,7 +18,7 @@ export default function Navigation() {
       <div className="flex h-16 items-center justify-between px-6">
         <div className="flex items-center gap-6">
           <Link href="/">
-            <a className="flex items-center gap-3 hover-elevate rounded-md px-3 py-2 -ml-3">
+            <div className="flex items-center gap-3 hover-elevate rounded-md px-3 py-2 -ml-3 cursor-pointer">
               <div className="flex h-10 w-10 items-center justify-center rounded-md bg-primary">
                 <Zap className="h-6 w-6 text-primary-foreground" />
               </div>
@@ -26,7 +26,7 @@ export default function Navigation() {
                 <h1 className="text-xl font-bold">Grid Command Center</h1>
                 <p className="text-xs text-muted-foreground hidden sm:block">Beckn Protocol DER Orchestration</p>
               </div>
-            </a>
+            </div>
           </Link>
           
           <nav className="hidden md:flex items-center gap-2">
@@ -36,17 +36,15 @@ export default function Navigation() {
               
               return (
                 <Link key={item.path} href={item.path}>
-                  <a>
-                    <Button
-                      variant={isActive ? "default" : "ghost"}
-                      size="sm"
-                      className="gap-2"
-                      data-testid={`nav-${item.label.toLowerCase().replace(' ', '-')}`}
-                    >
-                      <Icon className="h-4 w-4" />
-                      {item.label}
-                    </Button>
-                  </a>
+                  <Button
+                    variant={isActive ? "default" : "ghost"}
+                    size="sm"
+                    className="gap-2"
+                    data-testid={`nav-${item.label.toLowerCase().replace(' ', '-')}`}
+                  >
+                    <Icon className="h-4 w-4" />
+                    {item.label}
+                  </Button>
                 </Link>
               );
             })}
@@ -70,16 +68,14 @@ export default function Navigation() {
           
           return (
             <Link key={item.path} href={item.path}>
-              <a>
-                <Button
-                  variant={isActive ? "default" : "ghost"}
-                  size="sm"
-                  className="gap-2 whitespace-nowrap"
-                >
-                  <Icon className="h-4 w-4" />
-                  {item.label}
-                </Button>
-              </a>
+              <Button
+                variant={isActive ? "default" : "ghost"}
+                size="sm"
+                className="gap-2 whitespace-nowrap"
+              >
+                <Icon className="h-4 w-4" />
+                {item.label}
+              </Button>
             </Link>
           );
         })}
