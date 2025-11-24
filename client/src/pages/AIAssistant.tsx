@@ -34,54 +34,36 @@ export default function AIAssistant() {
       }
 
       // BECKN Activate - Activate DERs
-      else if (lowerMessage.includes("activate") || lowerMessage.includes("enable") || lowerMessage.includes("turn on")) {
+      else if (lowerMessage.includes("activate") || lowerMessage.includes("enable") || lowerMessage.includes("turn on") || lowerMessage.includes("reduce")) {
         // Get feeders first to find one that needs help
         const feedersResponse = await fetch("/api/feeders");
         const feedersResult = await feedersResponse.json();
         const feeders = feedersResult.data || [];
         
         // Find a critical or warning feeder
-        const criticalFeeder = feeders.find((f: any) => f.status === "critical") || feeders.find((f: any) => f.status === "warning");
+        const targetFeeder = feeders.find((f: any) => f.status === "critical") || feeders.find((f: any) => f.status === "warning");
         
-        if (!criticalFeeder) {
-          return { response: "No critical feeders need assistance at this time." };
+        if (!targetFeeder) {
+          return { response: "✅ No feeders need assistance at this time. Grid is operating normally." };
         }
 
-        // Search for DERs
-        const searchResponse = await fetch("/api/der/search", {
+        // Use the auto-activation endpoint to activate DERs for this feeder
+        const activateResponse = await fetch(`/api/auto-activation/${targetFeeder.id}/confirm`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            fulfillmentType: "energy-dispatch",
-            quantity: { amount: "50", unit: "kWh" }
-          })
+          headers: { "Content-Type": "application/json" }
         });
 
-        const searchResult = await searchResponse.json();
-        if (searchResult.success && searchResult.data.length > 0) {
-          const der = searchResult.data[0];
+        const activateResult = await activateResponse.json();
+        if (activateResult.success) {
+          // Calculate load percentage and reduction
+          const loadPercentage = Math.round((targetFeeder.currentLoad / targetFeeder.capacity) * 100);
           
-          // Activate the DER for the critical feeder
-          const activateResponse = await fetch(`/api/der/${der.id}/activate`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              quantity: { amount: "50", unit: "kWh" },
-              startTime: new Date().toISOString(),
-              endTime: new Date(Date.now() + 3600000).toISOString(),
-              feederId: criticalFeeder.id
-            })
-          });
-
-          const activateResult = await activateResponse.json();
-          if (activateResult.success) {
-            return {
-              response: `✅ DER Activation Successful via BECKN Protocol!\n\n**Resource:** ${der.name}\n**Type:** ${der.type}\n**Order ID:** ${activateResult.data.orderId}\n**Capacity:** ${der.capacity} kW\n**Assigned to Feeder:** ${criticalFeeder.name}\n**Load Reduction:** 50 kWh\n**Estimated Cost:** $${50 * der.price_per_unit}\n\nThe resource is now active and reducing load on ${criticalFeeder.name}.`,
-              data: { orderId: activateResult.data.orderId, der, feeder: criticalFeeder }
-            };
-          }
+          return {
+            response: `⚡ **DER Activation Successful via BECKN Protocol!**\n\n**Status:** ✅ Active and Responding\n**Feeder:** ${targetFeeder.name}\n**Location:** ${targetFeeder.substationName}\n**Load Before:** ${loadPercentage}% (${targetFeeder.currentLoad.toFixed(1)} MW / ${targetFeeder.capacity} MW)\n**DERs Activated:** ${activateResult.dersActivated}\n**Expected Reduction:** ${activateResult.dersActivated * 25} kW\n\n🔄 DERs are now actively reducing load. The system will automatically deactivate them when load returns to normal levels.\n\n**Next Steps:** Monitor the feeder status to confirm load reduction.`,
+            data: { feeder: targetFeeder, dersActivated: activateResult.dersActivated }
+          };
         }
-        return { response: "No DERs available for activation at this time." };
+        return { response: "⚠️ Auto-activation is currently in progress. Please try again in a moment." };
       }
 
       // BECKN Status - Check DER status

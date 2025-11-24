@@ -7,10 +7,23 @@ import DERCard from "@/components/DERCard";
 import AlertBanner from "@/components/AlertBanner";
 import { Zap, Activity, Battery, Clock, Globe, Server } from "lucide-react";
 
+interface DashboardMetrics {
+  totalLoad: number;
+  availableCapacity: number;
+  activeDERCount: number;
+  avgResponseTime: number;
+}
+
 export default function Dashboard() {
   const [activatingDER, setActivatingDER] = useState<string | null>(null);
   const [mockDERs, setMockDERs] = useState<any[]>([]);
   const [externalData, setExternalData] = useState<any>(null);
+  const [metrics, setMetrics] = useState<DashboardMetrics>({
+    totalLoad: 0,
+    availableCapacity: 0,
+    activeDERCount: 0,
+    avgResponseTime: 0
+  });
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
@@ -18,7 +31,7 @@ export default function Dashboard() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [derResponse, dashboardResponse] = await Promise.all([
+        const [derResponse, dashboardResponse, feedersResponse] = await Promise.all([
           fetch("/api/der/search", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -27,17 +40,40 @@ export default function Dashboard() {
               quantity: { amount: "100", unit: "kWh" }
             })
           }),
-          fetch("/api/external/dashboard")
+          fetch("/api/external/dashboard"),
+          fetch("/api/feeders")
         ]);
         
         const derResult = await derResponse.json();
         const dashboardResult = await dashboardResponse.json();
+        const feedersResult = await feedersResponse.json();
         
         if (derResult.success) {
           setMockDERs(derResult.data);
         }
         if (dashboardResult.success) {
           setExternalData(dashboardResult.data);
+        }
+        
+        // Calculate real metrics from feeders
+        if (feedersResult.success && feedersResult.data) {
+          const feeders = feedersResult.data;
+          const totalLoad = feeders.reduce((sum: number, f: any) => sum + f.currentLoad, 0);
+          const totalCapacity = feeders.reduce((sum: number, f: any) => sum + f.capacity, 0);
+          const activeDERCount = feeders.reduce((sum: number, f: any) => sum + (f.activeDERs?.length || 0), 0);
+          
+          // Calculate average response time from feeders with active DERs
+          const feedersWithActiveDERs = feeders.filter((f: any) => f.activeDERs?.length > 0);
+          const avgResponseTime = feedersWithActiveDERs.length > 0
+            ? feedersWithActiveDERs.reduce((sum: number, f: any) => sum + (f.responseTime || 0), 0) / feedersWithActiveDERs.length / 1000
+            : 0;
+          
+          setMetrics({
+            totalLoad: Math.round(totalLoad * 100) / 100,
+            availableCapacity: Math.round((totalCapacity - totalLoad) * 100) / 100,
+            activeDERCount,
+            avgResponseTime: Math.round(avgResponseTime * 10) / 10
+          });
         }
       } catch (error) {
         console.error("Failed to fetch data:", error);
@@ -47,8 +83,8 @@ export default function Dashboard() {
     };
     
     fetchData();
-    // Refresh every 30 seconds
-    const interval = setInterval(fetchData, 30000);
+    // Refresh every 5 seconds for real-time updates
+    const interval = setInterval(fetchData, 5000);
     return () => clearInterval(interval);
   }, []);
 
@@ -132,34 +168,34 @@ export default function Dashboard() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           <StatusCard
             title="Total Load"
-            value="2,847"
+            value={metrics.totalLoad.toString()}
             unit="MW"
             icon={Zap}
-            trend="+12% from last hour"
-            trendPositive={false}
+            trend={metrics.totalLoad > 150 ? "⚠️ High demand" : "✅ Normal"}
+            trendPositive={metrics.totalLoad <= 150}
           />
           <StatusCard
             title="Available Capacity"
-            value="1,453"
+            value={metrics.availableCapacity.toString()}
             unit="MW"
             icon={Activity}
-            trend="+5% available"
+            trend={`${Math.round((metrics.availableCapacity / (metrics.totalLoad + metrics.availableCapacity)) * 100)}% headroom`}
             trendPositive={true}
           />
           <StatusCard
             title="Active DERs"
-            value={activeDERs}
+            value={metrics.activeDERCount.toString()}
             icon={Battery}
-            trend={`${availableDERs - activeDERs} standby`}
-            trendPositive={true}
+            trend={metrics.activeDERCount > 0 ? "Actively reducing load" : "Standby"}
+            trendPositive={metrics.activeDERCount > 0}
           />
           <StatusCard
             title="Response Time"
-            value="3.2"
-            unit="sec"
+            value={metrics.avgResponseTime > 0 ? metrics.avgResponseTime.toString() : "—"}
+            unit={metrics.avgResponseTime > 0 ? "sec" : ""}
             icon={Clock}
-            trend="Sub-5s SLA met"
-            trendPositive={true}
+            trend={metrics.avgResponseTime > 0 ? `${metrics.avgResponseTime < 5 ? "✅ Sub-5s SLA met" : "⚠️ Exceeding SLA"}` : "No active responses"}
+            trendPositive={metrics.avgResponseTime < 5 || metrics.avgResponseTime === 0}
           />
         </div>
       </section>
