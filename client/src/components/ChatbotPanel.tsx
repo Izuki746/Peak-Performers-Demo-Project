@@ -17,11 +17,10 @@ interface Message {
 }
 
 interface ChatbotPanelProps {
-  onSendMessage?: (message: string) => void;
-  isProcessing?: boolean;
+  onSendMessage?: (message: string) => Promise<{ response: string; data?: any }>;
 }
 
-export default function ChatbotPanel({ onSendMessage, isProcessing = false }: ChatbotPanelProps) {
+export default function ChatbotPanel({ onSendMessage }: ChatbotPanelProps) {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "welcome",
@@ -31,6 +30,7 @@ export default function ChatbotPanel({ onSendMessage, isProcessing = false }: Ch
     }
   ]);
   const [input, setInput] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -39,8 +39,8 @@ export default function ChatbotPanel({ onSendMessage, isProcessing = false }: Ch
     }
   }, [messages]);
 
-  const handleSend = () => {
-    if (!input.trim()) return;
+  const handleSend = async () => {
+    if (!input.trim() || isLoading) return;
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -50,29 +50,36 @@ export default function ChatbotPanel({ onSendMessage, isProcessing = false }: Ch
     };
 
     setMessages(prev => [...prev, userMessage]);
+    const userInput = input;
     setInput("");
-    
-    if (onSendMessage) {
-      onSendMessage(input);
-    }
+    setIsLoading(true);
 
-    // TODO: remove mock functionality
-    setTimeout(() => {
-      const mockResponse: Message = {
-        id: (Date.now() + 1).toString(),
+    try {
+      if (onSendMessage) {
+        const result = await onSendMessage(userInput);
+        
+        const assistantMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          role: "assistant",
+          content: result.response,
+          timestamp: new Date(),
+          data: result.data,
+        };
+        
+        setMessages(prev => [...prev, assistantMessage]);
+      }
+    } catch (error) {
+      console.error("Error sending message:", error);
+      const errorMessage: Message = {
+        id: (Date.now() + 2).toString(),
         role: "assistant",
-        content: `I understand you want to: "${input}". I'm analyzing the grid data now...`,
+        content: "Sorry, I encountered an error processing your request. Please try again.",
         timestamp: new Date(),
-        actions: [
-          {
-            label: "View Details",
-            variant: "outline",
-            onClick: () => console.log("View details clicked")
-          }
-        ]
       };
-      setMessages(prev => [...prev, mockResponse]);
-    }, 1000);
+      setMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const quickActions = [
@@ -81,6 +88,48 @@ export default function ChatbotPanel({ onSendMessage, isProcessing = false }: Ch
     "Show grid status",
     "List available DERs"
   ];
+
+  const handleQuickAction = async (action: string) => {
+    setInput(action);
+    // Trigger the send with a slight delay to ensure state update
+    setTimeout(() => {
+      const userMessage: Message = {
+        id: Date.now().toString(),
+        role: "user",
+        content: action,
+        timestamp: new Date(),
+      };
+
+      setMessages(prev => [...prev, userMessage]);
+      setIsLoading(true);
+
+      // Call the send handler
+      if (onSendMessage) {
+        onSendMessage(action).then(result => {
+          const assistantMessage: Message = {
+            id: (Date.now() + 1).toString(),
+            role: "assistant",
+            content: result.response,
+            timestamp: new Date(),
+            data: result.data,
+          };
+          
+          setMessages(prev => [...prev, assistantMessage]);
+          setIsLoading(false);
+        }).catch(error => {
+          console.error("Error:", error);
+          setIsLoading(false);
+          const errorMessage: Message = {
+            id: (Date.now() + 2).toString(),
+            role: "assistant",
+            content: "Sorry, I encountered an error. Please try again.",
+            timestamp: new Date(),
+          };
+          setMessages(prev => [...prev, errorMessage]);
+        });
+      }
+    }, 100);
+  };
 
   return (
     <Card className="flex flex-col h-full">
@@ -99,10 +148,10 @@ export default function ChatbotPanel({ onSendMessage, isProcessing = false }: Ch
           {messages.map((message) => (
             <ChatMessage key={message.id} {...message} />
           ))}
-          {isProcessing && (
+          {isLoading && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" />
-              <span>AI is analyzing...</span>
+              <span>AI is processing your request...</span>
             </div>
           )}
         </div>
@@ -113,33 +162,38 @@ export default function ChatbotPanel({ onSendMessage, isProcessing = false }: Ch
           {quickActions.map((action, idx) => (
             <Button
               key={idx}
-              size="sm"
               variant="outline"
+              size="sm"
+              onClick={() => handleQuickAction(action)}
+              disabled={isLoading}
               className="text-xs"
-              onClick={() => setInput(action)}
-              data-testid={`button-quick-action-${idx}`}
+              data-testid={`quick-action-${idx}`}
             >
               {action}
             </Button>
           ))}
         </div>
-        
+
         <div className="flex gap-2">
           <Input
+            placeholder="Ask about feeders, DERs, or grid status..."
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleSend()}
-            placeholder="Ask about feeders, DERs, or grid status..."
-            disabled={isProcessing}
-            data-testid="input-chat-message"
+            disabled={isLoading}
+            data-testid="chat-input"
           />
           <Button
-            size="icon"
             onClick={handleSend}
-            disabled={!input.trim() || isProcessing}
-            data-testid="button-send-message"
+            disabled={isLoading || !input.trim()}
+            size="icon"
+            data-testid="chat-send-button"
           >
-            <Send className="h-4 w-4" />
+            {isLoading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Send className="h-4 w-4" />
+            )}
           </Button>
         </div>
       </div>
