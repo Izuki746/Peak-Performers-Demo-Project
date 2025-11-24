@@ -4,23 +4,26 @@ import { z } from "zod";
 import { storage } from "./storage";
 import * as beckn from "./beckn";
 import { externalApis, fetchGridData } from "./api-integrations";
+import * as bapSandbox from "./bap-sandbox";
+import * as agentOrchestrator from "./agent-orchestrator";
 
 const router = Router();
 
 export async function registerRoutes(app: Express) {
   app.use(router);
-  
+
   const server = createServer(app);
   return server;
 }
 
-// BECKN Protocol DER Search
+// ============================================
+// BECKN PROTOCOL ROUTES
+// ============================================
+
 router.post("/api/der/search", async (req, res) => {
   try {
     const { fulfillmentType, quantity } = req.body;
-
     const ders = await beckn.searchDERs(fulfillmentType || "energy-dispatch", quantity);
-
     res.json({
       success: true,
       data: ders,
@@ -34,14 +37,11 @@ router.post("/api/der/search", async (req, res) => {
   }
 });
 
-// BECKN Protocol DER Selection
 router.post("/api/der/:id/select", async (req, res) => {
   try {
     const { id } = req.params;
     const { quantity, startTime, endTime } = req.body;
-
     const result = await beckn.selectDER(id, quantity, startTime, endTime);
-
     res.json({
       success: true,
       data: result,
@@ -55,16 +55,12 @@ router.post("/api/der/:id/select", async (req, res) => {
   }
 });
 
-// BECKN Protocol DER Activation (Init + Confirm combined)
 router.post("/api/der/:id/activate", async (req, res) => {
   try {
     const { id } = req.params;
     const { quantity, startTime, endTime, feederId } = req.body;
 
-    // Step 1: Init
     const initResult = await beckn.initiateDERActivation(id, quantity, startTime, endTime);
-
-    // Step 2: Confirm
     const confirmResult = await beckn.confirmDERActivation(
       id,
       initResult.orderId,
@@ -73,7 +69,6 @@ router.post("/api/der/:id/activate", async (req, res) => {
       endTime
     );
 
-    // Step 3: Track DER activation and update feeder load
     const output = parseFloat(quantity.amount);
     if (feederId) {
       await storage.activateDERForFeeder(id, feederId, output, confirmResult.orderId);
@@ -92,7 +87,6 @@ router.post("/api/der/:id/activate", async (req, res) => {
   }
 });
 
-// Get Feeders with calculated loads
 router.get("/api/feeders", async (req, res) => {
   try {
     const feeders = await storage.getFeedersWithLoad();
@@ -108,13 +102,10 @@ router.get("/api/feeders", async (req, res) => {
   }
 });
 
-// BECKN Protocol Check Status
 router.get("/api/der/status/:orderId", async (req, res) => {
   try {
     const { orderId } = req.params;
-
     const status = await beckn.getDERActivationStatus(orderId);
-
     res.json({
       success: true,
       data: status,
@@ -127,13 +118,10 @@ router.get("/api/der/status/:orderId", async (req, res) => {
   }
 });
 
-// BECKN Protocol Cancel
 router.post("/api/der/:orderId/cancel", async (req, res) => {
   try {
     const { orderId } = req.params;
-
     const result = await beckn.cancelDERActivation(orderId);
-
     res.json({
       success: true,
       data: result,
@@ -147,7 +135,10 @@ router.post("/api/der/:orderId/cancel", async (req, res) => {
   }
 });
 
-// NESO Energy Data Portal Routes
+// ============================================
+// EXTERNAL API ROUTES (NESO + UK Power Networks)
+// ============================================
+
 router.get("/api/external/neso/grid-status", async (req, res) => {
   try {
     const data = await fetchGridData("neso", "getGridStatus");
@@ -176,7 +167,6 @@ router.get("/api/external/neso/forecast", async (req, res) => {
   }
 });
 
-// UK Power Networks API Routes
 router.get("/api/external/ukpn/substations", async (req, res) => {
   try {
     const region = req.query.region as string;
@@ -228,13 +218,12 @@ router.get("/api/external/ukpn/oml/:substationId", async (req, res) => {
   }
 });
 
-// Combined dashboard data
 router.get("/api/external/dashboard", async (req, res) => {
   try {
     const [nesoStatus, ukpnFeeders, nesoForecast] = await Promise.all([
       fetchGridData("neso", "getGridStatus"),
       fetchGridData("ukpowernetworks", "getFeeders"),
-      fetchGridData("neso", "getForecast", 24)
+      fetchGridData("neso", "getForecast", 24),
     ]);
 
     res.json({
@@ -242,11 +231,74 @@ router.get("/api/external/dashboard", async (req, res) => {
       data: {
         national: nesoStatus,
         local: ukpnFeeders,
-        forecast: nesoForecast
-      }
+        forecast: nesoForecast,
+      },
     });
   } catch (error) {
     res.status(500).json({ success: false, error: "Failed to fetch dashboard data" });
+  }
+});
+
+// ============================================
+// BAP SANDBOX ROUTES
+// ============================================
+
+router.post("/api/sandbox/discover", async (req, res) => {
+  try {
+    const result = await bapSandbox.discoverDERs(req.body.fulfillmentType || "energy-dispatch");
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ success: false, error: String(error) });
+  }
+});
+
+router.post("/api/sandbox/journey", async (req, res) => {
+  try {
+    const result = await bapSandbox.executeFullBecknjJourney(
+      req.body.fulfillmentType || "energy-dispatch",
+      req.body.quantity || { amount: "50", unit: "kWh" }
+    );
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ success: false, error: String(error) });
+  }
+});
+
+// ============================================
+// AGENT ORCHESTRATOR ROUTES
+// ============================================
+
+router.post("/api/agent/orchestrate", async (req, res) => {
+  try {
+    const problem = req.body;
+    const result = await agentOrchestrator.orchestrateGridResponse(problem);
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ success: false, error: String(error) });
+  }
+});
+
+router.get("/api/agent/analyze", async (req, res) => {
+  try {
+    const exampleProblem = {
+      type: "demand-spike",
+      feederId: "F-1234",
+      substationId: "Westminster",
+      currentLoad: 92,
+      capacity: 95,
+      urgency: "critical",
+      description: "Feeder F-1234 at Westminster exceeding 92% capacity",
+    };
+
+    const decisions = agentOrchestrator.analyzeProblem(exampleProblem);
+    res.json({
+      success: true,
+      problem: exampleProblem,
+      decisions,
+      message: "Agent analysis complete",
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: String(error) });
   }
 });
 
