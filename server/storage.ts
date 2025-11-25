@@ -153,42 +153,47 @@ export class MemStorage implements IStorage {
 
   private startDynamicLoadSimulation() {
     // Update loads every 3 seconds to simulate grid fluctuations
-    // But keep them stable most of the time - only spike occasionally
+    // Every 15 seconds, one feeder spikes to critical (rotating pattern)
     let cycleCount = 0;
+    const feederIds = this.mockFeeders.map(f => f.id);
     
     setInterval(() => {
       cycleCount++;
+      
+      // Determine which feeder should spike (rotate every 5 cycles = 15 seconds)
+      const cyclePhase = ((cycleCount - 1) % (5 * feederIds.length)); // Total cycle = 5 cycles per feeder
+      const criticalFeederIndex = Math.floor(cyclePhase / 5) % feederIds.length;
+      const phasInCycle = (cycleCount - 1) % 5; // Position within 15-second cycle: 0-4
+      const criticalFeederId = feederIds[criticalFeederIndex];
+      
       this.feederBaseLoads.forEach((loadData, feederId) => {
-        // Most cycles (80% of time): small variations (±5%)
-        // Some cycles (20% of time): larger variations (±8%)
-        // Only occasional spikes to critical levels
-        
-        let maxVariance = loadData.baseLoad * 0.05; // Default: ±5%
-        
-        // 20% of the time, allow slightly larger variations
-        if (cycleCount % 5 === 0) {
-          maxVariance = loadData.baseLoad * 0.08; // Every 5th cycle: ±8%
-        }
-        
-        // Only 10% chance to spike near critical (once every 10 cycles)
-        if (cycleCount % 10 === 0 && Math.random() < 0.5) {
-          // Spike to near-critical for this one feeder
-          loadData.variance = loadData.baseLoad * 0.12; // Push to ~97% of capacity
+        if (feederId === criticalFeederId) {
+          // This feeder is in its critical cycle (15 seconds)
+          if (phasInCycle < 4) {
+            // Cycles 0-3 (first 12 seconds): Spike to critical
+            loadData.variance = loadData.baseLoad * 0.30; // Push to ~105% load
+            loadData.targetLoad = loadData.baseLoad + loadData.variance;
+          } else {
+            // Cycle 4 (last 3 seconds): Decay back to normal
+            loadData.variance = Math.max(0, loadData.variance * 0.7);
+            loadData.targetLoad = loadData.baseLoad + loadData.variance;
+          }
         } else {
-          // Normal small random walk
+          // Other feeders: small normal variations (±5%)
+          const maxVariance = loadData.baseLoad * 0.05;
           const change = (Math.random() - 0.5) * maxVariance * 0.2;
           loadData.variance += change;
           
-          // Keep variance within bounds (smaller than before)
+          // Keep variance within bounds
           if (Math.abs(loadData.variance) > maxVariance) {
             loadData.variance = Math.sign(loadData.variance) * (maxVariance * 0.8);
           }
+          
+          // Gradually return to baseline
+          loadData.variance *= 0.95;
+          loadData.targetLoad = loadData.baseLoad + loadData.variance;
         }
         
-        // Gradually return to baseline if not spiking
-        loadData.variance *= 0.95; // Decay towards baseline
-        
-        loadData.targetLoad = loadData.baseLoad + loadData.variance;
         loadData.targetLoad = Math.max(0, Math.min(loadData.targetLoad, 100));
       });
     }, 3000);
@@ -302,6 +307,15 @@ export class MemStorage implements IStorage {
       // Calculate current load accounting for active DER contributions
       const calculatedLoad = Math.max(0, dynamicBaseLoad - feeder.activeDERContribution);
       
+      // Calculate status based on current load percentage
+      const loadPercentage = (calculatedLoad / feeder.capacity) * 100;
+      let status: "normal" | "warning" | "critical" = "normal";
+      if (loadPercentage > 90) {
+        status = "critical";
+      } else if (loadPercentage > 75) {
+        status = "warning";
+      }
+      
       // Calculate response time since last DER activation
       const activationTime = this.feederActivationTimes.get(feeder.id);
       const responseTime = activationTime ? Date.now() - activationTime : undefined;
@@ -311,6 +325,7 @@ export class MemStorage implements IStorage {
         ...feeder,
         baseLoad: dynamicBaseLoad,
         currentLoad: calculatedLoad,
+        status: status,
         activeDERs: activeDERs,
         responseTime: responseTime,
         isResponding: isResponding
