@@ -91,7 +91,6 @@ export default async function runApp(
   server.listen({
     port,
     host,
-    reusePort: true,
   }, () => {
     log(`serving on http://${host === "0.0.0.0" ? "localhost" : host}:${port}`);
   });
