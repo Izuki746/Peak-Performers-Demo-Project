@@ -60,11 +60,11 @@ export class MemStorage implements IStorage {
       id: "F-1234",
       name: "Feeder F-1234",
       substationName: "Westminster Substation",
-      baseLoad: 87.5,
-      currentLoad: 87.5,
+      baseLoad: 70.0,
+      currentLoad: 70.0,
       capacity: 95,
-      status: "critical",
-      criticality: "critical",
+      status: "normal",
+      criticality: "medium",
       connectedDERs: 12,
       activeDERContribution: 0
     },
@@ -72,11 +72,11 @@ export class MemStorage implements IStorage {
       id: "F-5678",
       name: "Feeder F-5678",
       substationName: "Camden Substation",
-      baseLoad: 68.2,
-      currentLoad: 68.2,
+      baseLoad: 60.0,
+      currentLoad: 60.0,
       capacity: 90,
-      status: "warning",
-      criticality: "high",
+      status: "normal",
+      criticality: "medium",
       connectedDERs: 8,
       activeDERContribution: 0
     },
@@ -120,11 +120,11 @@ export class MemStorage implements IStorage {
       id: "F-2468",
       name: "Feeder F-2468",
       substationName: "Lambeth Substation",
-      baseLoad: 72.8,
-      currentLoad: 72.8,
+      baseLoad: 62.0,
+      currentLoad: 62.0,
       capacity: 85,
-      status: "warning",
-      criticality: "high",
+      status: "normal",
+      criticality: "medium",
       connectedDERs: 14,
       activeDERContribution: 0
     }
@@ -151,17 +151,40 @@ export class MemStorage implements IStorage {
 
   private startDynamicLoadSimulation() {
     // Update loads every 3 seconds to simulate grid fluctuations
+    // But keep them stable most of the time - only spike occasionally
+    let cycleCount = 0;
+    
     setInterval(() => {
+      cycleCount++;
       this.feederBaseLoads.forEach((loadData, feederId) => {
-        // Random walk to simulate demand variations (±15% variance)
-        const maxVariance = loadData.baseLoad * 0.15;
-        const change = (Math.random() - 0.5) * maxVariance * 0.3;
-        loadData.variance += change;
+        // Most cycles (80% of time): small variations (±5%)
+        // Some cycles (20% of time): larger variations (±8%)
+        // Only occasional spikes to critical levels
         
-        // Keep variance within bounds
-        if (Math.abs(loadData.variance) > maxVariance) {
-          loadData.variance = Math.sign(loadData.variance) * maxVariance;
+        let maxVariance = loadData.baseLoad * 0.05; // Default: ±5%
+        
+        // 20% of the time, allow slightly larger variations
+        if (cycleCount % 5 === 0) {
+          maxVariance = loadData.baseLoad * 0.08; // Every 5th cycle: ±8%
         }
+        
+        // Only 10% chance to spike near critical (once every 10 cycles)
+        if (cycleCount % 10 === 0 && Math.random() < 0.5) {
+          // Spike to near-critical for this one feeder
+          loadData.variance = loadData.baseLoad * 0.12; // Push to ~97% of capacity
+        } else {
+          // Normal small random walk
+          const change = (Math.random() - 0.5) * maxVariance * 0.2;
+          loadData.variance += change;
+          
+          // Keep variance within bounds (smaller than before)
+          if (Math.abs(loadData.variance) > maxVariance) {
+            loadData.variance = Math.sign(loadData.variance) * (maxVariance * 0.8);
+          }
+        }
+        
+        // Gradually return to baseline if not spiking
+        loadData.variance *= 0.95; // Decay towards baseline
         
         loadData.targetLoad = loadData.baseLoad + loadData.variance;
         loadData.targetLoad = Math.max(0, Math.min(loadData.targetLoad, 100));
