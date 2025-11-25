@@ -55,6 +55,7 @@ export class MemStorage implements IStorage {
   private auditLogs: AuditLog[] = [];
   private feederBaseLoads: Map<string, { baseLoad: number; targetLoad: number; variance: number }>;
   private feederActivationTimes: Map<string, number>; // track when DERs were last activated
+  private responseTimeDisplayTimeouts: Map<string, NodeJS.Timeout>; // track timeouts for clearing response times
   private mockFeeders: FeederWithCalculatedLoad[] = [
     {
       id: "F-1234",
@@ -134,6 +135,7 @@ export class MemStorage implements IStorage {
     this.users = new Map();
     this.activeDERs = new Map();
     this.feederActivationTimes = new Map();
+    this.responseTimeDisplayTimeouts = new Map();
     
     // Initialize dynamic load tracking for each feeder
     this.feederBaseLoads = new Map();
@@ -222,6 +224,21 @@ export class MemStorage implements IStorage {
     
     // Track activation time for response time calculation
     this.feederActivationTimes.set(feederId, Date.now());
+    
+    // Clear any existing timeout for this feeder
+    const existingTimeout = this.responseTimeDisplayTimeouts.get(feederId);
+    if (existingTimeout) {
+      clearTimeout(existingTimeout);
+    }
+    
+    // Set timeout to clear response time display after 30 seconds
+    const timeout = setTimeout(() => {
+      this.feederActivationTimes.delete(feederId);
+      this.responseTimeDisplayTimeouts.delete(feederId);
+    }, 30000);
+    
+    // Store timeout so we can clear it if a new activation happens
+    this.responseTimeDisplayTimeouts.set(feederId, timeout);
 
     // Update feeder's active DER contribution
     const feeder = this.mockFeeders.find(f => f.id === feederId);
