@@ -202,6 +202,55 @@ router.get("/api/feeders", async (req, res) => {
   }
 });
 
+router.get("/api/alerts", async (req, res) => {
+  try {
+    const feeders = await storage.getFeedersWithLoad();
+    const alerts: any[] = [];
+    
+    // Generate alerts based on actual feeder statuses
+    feeders.forEach(feeder => {
+      const loadPercent = (feeder.currentLoad / feeder.capacity) * 100;
+      
+      // Critical alert
+      if (loadPercent > 90) {
+        alerts.push({
+          id: `alert-${feeder.id}-critical`,
+          severity: "critical",
+          message: `Feeder ${feeder.name} at ${feeder.substationName} exceeding ${Math.round(loadPercent)}% capacity. Immediate DER activation recommended.`,
+          feederId: feeder.id,
+          timestamp: new Date(),
+          loadPercent: Math.round(loadPercent),
+          capacity: feeder.capacity,
+          currentLoad: Math.round(feeder.currentLoad * 10) / 10
+        });
+      }
+      // Warning alert
+      else if (loadPercent > 75) {
+        alerts.push({
+          id: `alert-${feeder.id}-warning`,
+          severity: "warning",
+          message: `Feeder ${feeder.name} at ${feeder.substationName} approaching capacity at ${Math.round(loadPercent)}%. Monitor for potential DER activation.`,
+          feederId: feeder.id,
+          timestamp: new Date(),
+          loadPercent: Math.round(loadPercent),
+          capacity: feeder.capacity,
+          currentLoad: Math.round(feeder.currentLoad * 10) / 10
+        });
+      }
+    });
+    
+    res.json({
+      success: true,
+      data: alerts,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: "Failed to fetch alerts",
+    });
+  }
+});
+
 // ============================================
 // AUTO-ACTIVATION ENDPOINTS
 // ============================================

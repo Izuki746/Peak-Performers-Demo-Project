@@ -14,10 +14,23 @@ interface DashboardMetrics {
   avgResponseTime: number;
 }
 
+interface Alert {
+  id: string;
+  severity: "critical" | "warning";
+  message: string;
+  feederId: string;
+  timestamp: Date;
+  loadPercent?: number;
+  capacity?: number;
+  currentLoad?: number;
+}
+
 export default function Dashboard() {
   const [activatingDER, setActivatingDER] = useState<string | null>(null);
   const [mockDERs, setMockDERs] = useState<any[]>([]);
   const [externalData, setExternalData] = useState<any>(null);
+  const [alerts, setAlerts] = useState<Alert[]>([]);
+  const [dismissedAlerts, setDismissedAlerts] = useState<Set<string>>(new Set());
   const [metrics, setMetrics] = useState<DashboardMetrics>({
     totalLoad: 0,
     availableCapacity: 0,
@@ -31,7 +44,7 @@ export default function Dashboard() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [derResponse, dashboardResponse, feedersResponse] = await Promise.all([
+        const [derResponse, dashboardResponse, feedersResponse, alertsResponse] = await Promise.all([
           fetch("/api/der/search", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -41,18 +54,30 @@ export default function Dashboard() {
             })
           }),
           fetch("/api/external/dashboard"),
-          fetch("/api/feeders")
+          fetch("/api/feeders"),
+          fetch("/api/alerts")
         ]);
         
         const derResult = await derResponse.json();
         const dashboardResult = await dashboardResponse.json();
         const feedersResult = await feedersResponse.json();
+        const alertsResult = await alertsResponse.json();
         
         if (derResult.success) {
           setMockDERs(derResult.data);
         }
         if (dashboardResult.success) {
           setExternalData(dashboardResult.data);
+        }
+        
+        // Update alerts - filter out dismissed ones
+        if (alertsResult.success && alertsResult.data) {
+          const allAlerts = alertsResult.data.map((alert: any) => ({
+            ...alert,
+            timestamp: new Date(alert.timestamp)
+          }));
+          const visibleAlerts = allAlerts.filter((a: Alert) => !dismissedAlerts.has(a.id));
+          setAlerts(visibleAlerts);
         }
         
         // Calculate real metrics from feeders
@@ -86,25 +111,8 @@ export default function Dashboard() {
     // Refresh every 3 seconds for real-time updates (<5s SLA)
     const interval = setInterval(fetchData, 3000);
     return () => clearInterval(interval);
-  }, []);
+  }, [dismissedAlerts]);
 
-  // TODO: remove mock data
-  const mockAlerts = [
-    {
-      id: "alert-1",
-      severity: "critical" as const,
-      message: "Feeder F-1234 at Westminster Substation exceeding 92% capacity. Immediate DER activation recommended.",
-      feederId: "F-1234",
-      timestamp: new Date(Date.now() - 45000)
-    },
-    {
-      id: "alert-2",
-      severity: "warning" as const,
-      message: "Predicted load spike in Camden area within next 15 minutes.",
-      feederId: "F-5678",
-      timestamp: new Date(Date.now() - 120000)
-    }
-  ];
 
 
   const handleActivateDER = async (derId: string) => {
@@ -151,9 +159,16 @@ export default function Dashboard() {
   };
 
   const handleDismissAlert = (alertId: string) => {
+    const newDismissed = new Set(dismissedAlerts);
+    newDismissed.add(alertId);
+    setDismissedAlerts(newDismissed);
+    
+    // Remove from alerts display
+    setAlerts(alerts.filter(a => a.id !== alertId));
+    
     toast({
       title: "Alert Dismissed",
-      description: `Alert ${alertId} has been acknowledged`,
+      description: `Alert has been acknowledged`,
     });
   };
 
@@ -201,11 +216,11 @@ export default function Dashboard() {
       </section>
 
       {/* Active Alerts */}
-      {mockAlerts.length > 0 && (
+      {alerts.length > 0 && (
         <section>
           <h2 className="text-lg font-semibold mb-6">Active Alerts</h2>
           <div className="space-y-4">
-            {mockAlerts.map((alert) => (
+            {alerts.map((alert) => (
               <AlertBanner
                 key={alert.id}
                 {...alert}
